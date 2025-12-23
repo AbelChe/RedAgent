@@ -1,0 +1,34 @@
+
+> frontend@0.1.0 dev
+> next dev
+
+   ▲ Next.js 16.0.10 (Turbopack)
+   - Local:         http://localhost:3000
+   - Network:       http://127.0.0.2:3000
+
+ ✓ Starting...
+ ✓ Ready in 382ms
+(node:47492) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ⚠ Cross origin request detected from 127.0.0.1 to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+ GET /workspace/65d5c539-acf2-4b49-a86e-280cc26a623f 200 in 1144ms (compile: 834ms, render: 310ms)
+ GET /workspace/f4b6bceb-5bd4-4654-935d-c1857a045ec1 200 in 1635ms (compile: 1324ms, render: 311ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 1658ms (compile: 1347ms, render: 311ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 30ms (compile: 4ms, render: 26ms)
+ GET /workspace/65d5c539-acf2-4b49-a86e-280cc26a623f 200 in 23ms (compile: 3ms, render: 20ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 24ms (compile: 2ms, render: 22ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 23ms (compile: 3ms, render: 20ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 22ms (compile: 3ms, render: 19ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 25ms (compile: 3ms, render: 21ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 22ms (compile: 2ms, render: 19ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 17ms (compile: 2ms, render: 15ms)
+ GET /apple-touch-icon-precomposed.png 404 in 220ms (compile: 184ms, render: 36ms)
+ GET /apple-touch-icon.png 404 in 219ms (compile: 190ms, render: 29ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 26ms (compile: 5ms, render: 21ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 23ms (compile: 3ms, render: 21ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 26ms (compile: 3ms, render: 23ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 43ms (compile: 11ms, render: 33ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 40ms (compile: 6ms, render: 34ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 41ms (compile: 5ms, render: 36ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 41ms (compile: 7ms, render: 34ms)

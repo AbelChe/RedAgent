@@ -1,0 +1,38 @@
+
+> frontend@0.1.0 dev
+> next dev
+
+   ▲ Next.js 16.0.10 (Turbopack)
+   - Local:         http://localhost:3000
+   - Network:       http://127.0.0.2:3000
+
+ ✓ Starting...
+ ✓ Ready in 305ms
+ ⚠ Cross origin request detected from 127.0.0.1 to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+ GET /workspace/29c69635-ae50-44a2-8c45-489bb4807c67 200 in 1457ms (compile: 1203ms, render: 255ms)
+ GET /workspace/65d5c539-acf2-4b49-a86e-280cc26a623f 200 in 1470ms (compile: 1215ms, render: 255ms)
+ ✓ Compiled in 21ms
+ ✓ Compiled in 35ms
+(node:45904) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ GET / 200 in 267ms (compile: 240ms, render: 27ms)
+ GET /workspace/dfafdb84-b906-4859-bfb8-80b7425224ba 200 in 35ms (compile: 22ms, render: 12ms)
+ GET /workspace/dfafdb84-b906-4859-bfb8-80b7425224ba 200 in 260ms (compile: 3ms, render: 257ms)
+ GET / 200 in 26ms (compile: 3ms, render: 23ms)
+ GET /workspace/033a7725-11a8-45a6-8f20-34eaf2721175 200 in 12ms (compile: 3ms, render: 9ms)
+ GET /workspace/033a7725-11a8-45a6-8f20-34eaf2721175 200 in 35ms (compile: 3ms, render: 32ms)
+ GET / 200 in 21ms (compile: 3ms, render: 18ms)
+ GET /workspace/15a75719-cb7e-4154-b985-1b211a872196 200 in 15ms (compile: 4ms, render: 11ms)
+ GET /workspace/15a75719-cb7e-4154-b985-1b211a872196 200 in 29ms (compile: 3ms, render: 26ms)
+ GET / 200 in 22ms (compile: 3ms, render: 19ms)
+ GET /workspace/a6ffa671-fd24-4f9f-ab80-d5fb725134e6 200 in 12ms (compile: 3ms, render: 9ms)
+ GET /workspace/a6ffa671-fd24-4f9f-ab80-d5fb725134e6 200 in 28ms (compile: 4ms, render: 25ms)
+ GET / 200 in 22ms (compile: 4ms, render: 19ms)
+ GET /workspace/09def47d-820e-4b2d-8b34-a0420291660e 200 in 13ms (compile: 3ms, render: 10ms)
+ GET / 200 in 25ms (compile: 2ms, render: 23ms)
+ GET /workspace/f4b6bceb-5bd4-4654-935d-c1857a045ec1 200 in 15ms (compile: 4ms, render: 11ms)
+ GET / 200 in 20ms (compile: 1475µs, render: 18ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 11ms (compile: 3ms, render: 8ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 23ms (compile: 3ms, render: 21ms)
+ GET /workspace/87671a69-803d-44d4-a943-a6e1b969f278 200 in 25ms (compile: 3ms, render: 22ms)
