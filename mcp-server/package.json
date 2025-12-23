@@ -1,0 +1,34 @@
+{
+  "name": "redagent-mcp-server",
+  "version": "1.0.0",
+  "description": "RedAgent MCP Server - AI-powered penetration testing tool execution engine following Model Context Protocol (MCP) standard.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.1",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.18.1",
+    "dockerode": "^4.0.9",
+    "dotenv": "^17.2.3",
+    "js-yaml": "^4.1.1",
+    "puppeteer": "^24.34.0",
+    "uuid": "^13.0.0",
+    "ws": "^8.18.3",
+    "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.47",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^25.0.3",
+    "typescript": "^5.9.3"
+  }
+}

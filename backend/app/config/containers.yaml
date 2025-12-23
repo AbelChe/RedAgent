@@ -1,0 +1,117 @@
+# 容器镜像映射配置
+# 定义工具与容器镜像的对应关系及安全配置
+
+# 默认配置（当工具未找到时使用）
+default:
+  image: parrotsec/security:7.0
+  capabilities:
+    - NET_RAW
+  memory_limit: 512m
+  cpu_limit: 1.0
+  pids_limit: 100
+
+# 端口扫描工具
+nmap:
+  image: parrotsec/security:7.0
+  capabilities:
+    - NET_RAW
+
+masscan:
+  image: parrotsec/security:7.0
+  capabilities:
+    - NET_RAW
+  memory_limit: 1g
+
+# 目录爆破工具
+gobuster:
+  image: parrotsec/security:7.0
+  capabilities: []
+
+dirb:
+  image: parrotsec/security:7.0
+  capabilities: []
+
+ffuf:
+  image: parrotsec/security:7.0
+  capabilities: []
+
+# 字典生成工具
+crunch:
+  image: parrotsec/security:7.0
+  capabilities: []
+  memory_limit: 256m
+
+cewl:
+  image: parrotsec/security:7.0
+  capabilities: []
+
+# 口令爆破工具
+hydra:
+  image: parrotsec/security:7.0
+  capabilities:
+    - NET_RAW
+
+medusa:
+  image: parrotsec/security:7.0
+  capabilities:
+    - NET_RAW
+
+ncrack:
+  image: parrotsec/security:7.0
+  capabilities:
+    - NET_RAW
+
+# 数据分析工具
+python:
+  image: python:3.11-slim
+  capabilities: []
+  memory_limit: 1g
+
+python3:
+  image: python:3.11-slim
+  capabilities: []
+  memory_limit: 1g
+
+# 漏洞利用工具
+msfconsole:
+  image: metasploitframework/metasploit-framework:latest
+  capabilities:
+    - NET_RAW
+    - NET_ADMIN
+  memory_limit: 2g
+  cpu_limit: 2.0
+
+msfvenom:
+  image: metasploitframework/metasploit-framework:latest
+  capabilities: []
+  memory_limit: 1g
+
+# 信息收集工具
+curl:
+  image: parrotsec/security:7.0
+  capabilities: []
+
+wget:
+  image: parrotsec/security:7.0
+  capabilities: []
+
+whois:
+  image: parrotsec/security:7.0
+  capabilities: []
+
+dig:
+  image: parrotsec/security:7.0
+  capabilities: []
+
+# Web 漏洞扫描
+nikto:
+  image: parrotsec/security:7.0
+  capabilities: []
+
+sqlmap:
+  image: parrotsec/security:7.0
+  capabilities: []
+
+nuclei:
+  image: projectdiscovery/nuclei:latest
+  capabilities: []

@@ -1,0 +1,15 @@
+{
+    "mcpServers": {
+        "pentest-agent": {
+            "command": "node",
+            "args": [
+                "dist/index.js",
+                "--mode",
+                "docker"
+            ],
+            "env": {
+                "NODE_ENV": "development"
+            }
+        }
+    }
+}
