@@ -6,6 +6,7 @@ class CommandResult(BaseModel):
     exit_code: int
     stdout: str
     stderr: str
+    output_files: list[str] = []  # Paths to generated output files in workspace volume
     
     @property
     def output(self) -> str:

@@ -21,3 +21,4 @@ class AgentState(TypedDict):
     mode: str # "ask", "planning", "agent"
     next_step: str # Navigation hint for the router
     thinking: str # Reasoning process/thinking content
+    workspace_config: dict # Workspace-specific configuration overrides

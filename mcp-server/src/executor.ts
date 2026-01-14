@@ -48,8 +48,10 @@ export class DockerExecutor {
         return this.executeInContainer(this.defaultContainer, command);
     }
 
-    async executeEphemeral(command: string[], config: ContainerConfig): Promise<string> {
-        const workspacePath = path.resolve(process.cwd(), 'workspace_data');
+    async executeEphemeral(command: string[], config: ContainerConfig, volumeName?: string): Promise<string> {
+        // Use Docker named volume for secure workspace sharing
+        // Volume name is passed via WORKSPACE_VOLUME_NAME env var or argument
+        const targetVolume = volumeName || process.env.WORKSPACE_VOLUME_NAME || 'redagent-workspace';
 
         try {
             // Pull image if not exists (simplified, might want to check first)
@@ -57,16 +59,12 @@ export class DockerExecutor {
 
             const runStream = await this.docker.run(config.image, command, process.stdout, {
                 HostConfig: {
-                    Binds: [`${workspacePath}:/data`],
+                    Binds: [`${targetVolume}:/workspace`],
                     AutoRemove: true,
                     CapAdd: config.capabilities as any
-                }
+                },
+                WorkingDir: '/workspace'
             });
-
-            // Note: dockerode run returns output differently depending on stream options.
-            // For simplicity in this v1, we might need to capture stream manually if process.stdout isn't what we want.
-            // However, `docker.run` outputs to the provided stream.
-            // We will refine this to capture output to return string.
 
             return "Execution finished (Ephemeral container mode)";
         } catch (error: any) {
@@ -75,21 +73,22 @@ export class DockerExecutor {
     }
 
     // Revised executeEphemeral to capture output
-    async executeEphemeralCaptured(command: string[], config: ContainerConfig): Promise<string> {
-        const workspacePath = path.resolve(process.cwd(), 'workspace_data');
+    async executeEphemeralCaptured(command: string[], config: ContainerConfig, onData?: (data: string) => void, volumeName?: string): Promise<string> {
+        // Use Docker named volume for secure workspace sharing
+        const targetVolume = volumeName || process.env.WORKSPACE_VOLUME_NAME || 'redagent-workspace';
         console.error(`🚀 [MCP-EDGE] STARTING TOOL: ${command.join(' ')} (Image: ${config.image})`);
 
         try {
             // We use createContainer directly to control auto-remove and streams better
-            // Pulling image might be needed if not present, but skipping for speed assuming pre-pulled or auto-pull on run
             const container = await this.docker.createContainer({
                 Image: config.image,
                 Cmd: command,
                 HostConfig: {
-                    Binds: [`${workspacePath}:/data`],
+                    Binds: [`${targetVolume}:/workspace`],
                     AutoRemove: true,
                     CapAdd: config.capabilities as any
                 },
+                WorkingDir: '/workspace',
                 Tty: false
             });
 
@@ -98,20 +97,18 @@ export class DockerExecutor {
 
             let output = '';
 
-            // Simple stream handler to capture output AND print to console for visibility
+            // Stream handler with real-time callback support (like docker logs -f)
             stream.on('data', (chunk: Buffer) => {
-                // Remove Docker header bytes (First 8 bytes are header if multiplexed)
-                // However, without strict parsing, this is hacky.
-                // Dockerode's demuxStream is better for printing.
-                // But generally for a quick "Get string", we can just append, but raw output has headers.
-                // For this agent V1, we accept minor artifacts or use demux.
-                // Let's try to just return standard logging.
-                // console.log(chunk.toString()); // Log to MCP console
-                output += chunk.toString().replace(/[\x00-\x1F]/g, ''); // Strip control chars roughly
+                // Demux Docker stream (remove 8-byte header)
+                const data = this.demuxDockerStream(chunk);
+                if (data) {
+                    output += data;
+                    // Real-time callback for streaming output to caller
+                    if (onData) {
+                        onData(data);
+                    }
+                }
             });
-
-            // Use Dockerode's demux to print cleanly to the MCP Console for the user
-            container.modem.demuxStream(stream, process.stdout, process.stderr);
 
             await container.wait();
 
@@ -138,6 +135,69 @@ export class DockerExecutor {
             console.error(`Error checking image ${imageName}: ${error.message}`);
             return false;
         }
+    }
+
+    /**
+     * Starts a persistent container with PTY enabled and returns the stream.
+     * Used for interactive terminal sessions.
+     */
+    async startPtyContainer(image: string, cmd: string[] = ['/bin/bash']): Promise<{ container: Docker.Container, stream: NodeJS.ReadWriteStream }> {
+        // Use Docker named volume for secure workspace sharing
+        const volumeName = process.env.WORKSPACE_VOLUME_NAME || 'redagent-workspace';
+
+        const container = await this.docker.createContainer({
+            Image: image,
+            Cmd: cmd,
+            Tty: true,
+            OpenStdin: true,
+            AttachStdin: true,
+            AttachStdout: true,
+            AttachStderr: true,
+            HostConfig: {
+                Binds: [`${volumeName}:/data`],
+                AutoRemove: true, // Be careful with AutoRemove if we want to inspect after
+            }
+        });
+
+        // Attach stream BEFORE starting to capture initial output
+        const stream = await container.attach({
+            stream: true,
+            stdin: true,
+            stdout: true,
+            stderr: true
+        });
+
+        await container.start();
+
+        // Resize to standard terminal size initially
+        await container.resize({ h: 24, w: 80 });
+
+        return { container, stream };
+    }
+
+    /**
+     * Demux Docker stream format (removes 8-byte header from multiplexed streams)
+     * Docker stream format: [stream_type(1)][padding(3)][size(4)][payload]
+     * @param chunk Raw Buffer from Docker stream
+     * @returns Demuxed payload as string, or null if invalid
+     */
+    private demuxDockerStream(chunk: Buffer): string | null {
+        if (chunk.length < 8) {
+            return null; // Not enough bytes for header
+        }
+
+        // Read the 4-byte size from bytes 4-7 (big-endian)
+        const payloadSize = chunk.readUInt32BE(4);
+
+        if (chunk.length < 8 + payloadSize) {
+            // Incomplete payload, might be fragmented
+            // For simplicity, return what we have (could be improved)
+            return chunk.slice(8).toString('utf8');
+        }
+
+        // Extract payload (skip 8-byte header)
+        const payload = chunk.slice(8, 8 + payloadSize);
+        return payload.toString('utf8');
     }
 }
 

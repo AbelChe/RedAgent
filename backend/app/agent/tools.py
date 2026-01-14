@@ -57,7 +57,8 @@ async def execute_command(command: str) -> str:
     """
     在渗透测试沙箱中执行 shell 命令。
     使用此工具运行 nmap、curl、gobuster 等工具。
-    返回命令的标准输出和标准错误。
+    长时间运行的扫描工具会自动提交到任务队列异步执行。
+    返回命令的标准输出和标准错误，或任务队列ID。
     """
     task_id = current_task_id.get()
     workspace_id = current_workspace_id.get()
@@ -72,8 +73,46 @@ async def execute_command(command: str) -> str:
     if len(command) > 5000:
         return "错误: 命令过长 (最大 5000 字符)"
 
+    # 检查是否为异步工具
+    from app.utils.command_parser import extract_tool_name
+    from app.config.tool_config import is_async_tool
+    
+    tool_name = extract_tool_name(command)
+    if tool_name and is_async_tool(tool_name):
+        # 异步工具：提交到任务队列
+        try:
+            from app.core.database import AsyncSessionLocal
+            from app.services.jobs_service import JobsService
+            
+            async with AsyncSessionLocal() as session:
+                jobs_service = JobsService(session)
+                job = await jobs_service.create_job(
+                    workspace_id=workspace_id or task_id,
+                    command=command,
+                    priority=5,
+                    agent_id="agent",
+                    task_id=task_id
+                )
+                
+                logger.info(f"[异步] 任务 {task_id} 命令已提交到队列: Job ID {job.id}")
+                
+                return (
+                    f"✅ 扫描任务已提交到队列执行\n\n"
+                    f"**任务ID**: {job.id[:8]}...\n"
+                    f"**工具**: {tool_name}\n"
+                    f"**命令**: {command}\n"
+                    f"**状态**: 等待执行\n\n"
+                    f"💡 此工具需要较长时间运行，已在后台异步执行。\n"
+                    f"您可以在右侧「Queue」面板查看任务进度。"
+                )
+        except Exception as e:
+            logger.error(f"[异步] 提交任务到队列失败: {str(e)}")
+            # 失败时回退到同步执行
+            logger.warning(f"[异步] 回退到同步执行模式")
+
+    # 同步执行（快速工具或异步失败）
     try:
-        logger.info(f"[审计] 任务 {task_id} 工作空间 {workspace_id} 执行: {command}")
+        logger.info(f"[同步] 任务 {task_id} 工作空间 {workspace_id} 执行: {command}")
         
         # 执行命令，传入工作空间 ID 以挂载对应的卷
         result: CommandResult = await executor.execute(
@@ -100,7 +139,7 @@ async def execute_command(command: str) -> str:
         except Exception as log_err:
             logger.error(f"[审计] 记录命令到数据库失败: {str(log_err)}")
         
-        logger.info(f"[审计] 任务 {task_id} 命令完成，退出码 {result.exit_code}")
+        logger.info(f"[同步] 任务 {task_id} 命令完成，退出码 {result.exit_code}")
 
         # 格式化输出
         output = f"退出码: {result.exit_code}\n"
@@ -110,7 +149,7 @@ async def execute_command(command: str) -> str:
             
         return output
     except Exception as e:
-        logger.error(f"[审计] 执行命令时出错: {str(e)}")
+        logger.error(f"[同步] 执行命令时出错: {str(e)}")
         return f"执行错误: {str(e)}"
 
 

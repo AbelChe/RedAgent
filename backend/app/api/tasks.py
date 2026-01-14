@@ -84,3 +84,14 @@ async def approve_background_wrapper(task_id: str):
         await manager.approve_task_and_resume(task_id)
 
 
+@router.post("/{task_id}/cancel", response_model=TaskResponse)
+async def cancel_task(
+    task_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Cancel a running task"""
+    manager = TaskManager(db)
+    task = await manager.cancel_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task

@@ -18,6 +18,10 @@ from app.services.container_registry import (
     extract_tool_from_command,
     ContainerConfig,
 )
+from app.utils.output_injection import (
+    inject_output_flags,
+    create_tool_output_directory,
+)
 from app.services.workspace_manager import workspace_manager
 import logging
 
@@ -70,7 +74,10 @@ class SandboxExecutor(BaseExecutor):
                 # Call 'execute_command' tool on MCP Server
                 mcp_result = await manager.call_mcp_tool(
                     "execute_command", 
-                    {"command": command},
+                    {
+                        "command": command,
+                        "workspace_id": workspace_id
+                    },
                     timeout=3600 # Long timeout for scans
                 )
                 
@@ -152,17 +159,24 @@ class SandboxExecutor(BaseExecutor):
         if not workspace_manager.volume_exists(workspace_id):
             workspace_manager.create_workspace_volume(workspace_id)
         
+        # Create tool-specific output directory and inject output flags
+        create_tool_output_directory(self.client, workspace_id, tool_name, workspace_manager.WORKSPACE_MOUNT_PATH)
+        modified_command, output_files = inject_output_flags(command, tool_name, workspace_manager.WORKSPACE_MOUNT_PATH)
+        
+        if output_files:
+            logger.info(f"📁 Output files will be saved to: {output_files}")
+        
         # 构建容器配置
         volumes = workspace_manager.get_container_mount_config(workspace_id)
         
         try:
             # 尝试解析命令为列表，避免 Shell 注入
             import shlex
-            cmd_list = shlex.split(command)
+            cmd_list = shlex.split(modified_command)
         except Exception:
             # 如果解析失败（例如包含复杂未闭合引号），降级为 Shell 执行
             # 使用 /bin/sh 兼容性更好，避免依赖 bash
-            cmd_list = ["/bin/sh", "-c", command]
+            cmd_list = ["/bin/sh", "-c", modified_command]
 
         # 安全配置
         EXECUTION_TIMEOUT = 3600  # 最大执行时间：1小时
@@ -223,7 +237,8 @@ class SandboxExecutor(BaseExecutor):
                 success=(exit_code == 0),
                 exit_code=exit_code,
                 stdout=output,
-                stderr="" if exit_code == 0 else "Command failed (check stdout for details)" 
+                stderr="" if exit_code == 0 else "Command failed (check stdout for details)",
+                output_files=output_files
             )
             
         except docker.errors.ImageNotFound:

@@ -8,15 +8,21 @@ services:
       # CRITICAL: Allow container to control host Docker
       - /var/run/docker.sock:/var/run/docker.sock
       
-      # Persist workspace data
-      - ./workspace_data:/app/workspace_data
+      # Use named volume for workspace data (safer than bind mount)
+      # This prevents malicious files from landing on host filesystem
+      - redagent-workspace:/app/workspace_data
       
       # Map host config (assuming relative path from mcp-server dir)
       - ../backend/app/config/containers.yaml:/app/config/containers.yaml
     environment:
-      - CONTAINER_CONFIG_PATH=/app/config/containers.yaml
-    # If using stdio, we don't strictly need ports, but if we switch to SSE in future:
-    # ports:
-    #   - "8000:8000"
+      # Volume name for ephemeral containers to mount
+      - WORKSPACE_VOLUME_NAME=redagent-workspace
+    env_file: .env.docker
+    restart: always
     stdin_open: true # Keep stdin open for MCP communication if running interactively
     tty: true
+
+# Define named volume for secure workspace data sharing
+volumes:
+  redagent-workspace:
+    driver: local

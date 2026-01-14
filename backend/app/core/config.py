@@ -1,9 +1,9 @@
 from pydantic_settings import BaseSettings
+from pydantic import Field
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "AI-Pentest Agent"
     DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5438/pentest"
-    REDIS_URL: str = "redis://localhost:6389"
     
     # LLM Settings
     LLM_PROVIDER: str = "anthropic" # anthropic, openai, deepseek, etc.
@@ -11,9 +11,21 @@ class Settings(BaseSettings):
     LLM_API_BASE: str = "" # Optional, for custom OpenAI-compatible endpoints
     LLM_API_KEY: str = "" # Generic API Key
 
-    # Legacy support
-    ANTHROPIC_API_KEY: str = "" 
+    # Legacy support  
+    ANTHROPIC_API_KEY: str = ""
+    
+    # Celery Configuration (uses existing Docker Redis on port 6389)
+    CELERY_BROKER_URL: str = "redis://localhost:6389/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6389/1"
     ANTHROPIC_AUTH_TOKEN: str = "" 
+    
+    # MCP Security
+    MCP_TOKEN: str = "dev-token-placeholder"
+    
+    # MCP Connectivity
+    # Default to host.docker.internal for Mac/Dev to allow container -> host access
+    # In production, set this to ws://backend:8000 or external URL
+    MCP_BACKEND_URL: str = "ws://host.docker.internal:8000"
 
     @property
     def api_key(self):

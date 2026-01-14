@@ -6,6 +6,7 @@ from app.schemas.command import CommandResult
 class TaskCreateRequest(BaseModel):
     content: str = Field(..., description="任务内容/指令")
     workspace_id: Optional[str] = Field(None, description="工作空间ID")
+    conversation_id: Optional[str] = Field(None, description="对话ID")
     mode: Literal["ask", "planning", "agent"] = Field("agent", description="运行模式")
 
 class TaskResponse(BaseModel):

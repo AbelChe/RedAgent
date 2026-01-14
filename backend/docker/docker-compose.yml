@@ -1,5 +1,9 @@
 version: '3.8'
 
+# Load environment variables from parent directory
+env_file:
+  - ../.env
+
 services:
   db:
     image: postgres:15-alpine
@@ -16,6 +20,52 @@ services:
     image: redis:7-alpine
     ports:
       - "6389:6379"
+    volumes:
+      - redis_data:/data
+  
+  # FastAPI Backend
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../app:/app/app
+      - /var/run/docker.sock:/var/run/docker.sock  # Access to Docker for sandbox execution
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/pentest
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
+      - LLM_MODEL=${LLM_MODEL:-claude-3-5-sonnet-20240620}
+      - MCP_TOKEN=${MCP_TOKEN:-dev-token-placeholder}
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+  
+  # Celery Worker for task queue
+  celery_worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=4
+    volumes:
+      - ../app:/app/app
+      - /var/run/docker.sock:/var/run/docker.sock  # Access to Docker for sandbox execution
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/pentest
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    depends_on:
+      - db
+      - redis
+      - backend  # Wait for backend to initialize DB
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+  redis_data:

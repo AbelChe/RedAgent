@@ -1,20 +1,30 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+// Config loaded first to ensure env vars are set
+import { Config } from './config';
+
 import { z } from "zod";
 import fs from 'fs';
 import path from 'path';
-import { loadContainerConfig } from './config';
 import { DockerExecutor } from './executor';
 import { SessionManager } from './session';
 import { BrowserHandler } from './browser';
 import { WebSocketReverseTransport } from './transport';
 import { KnowledgeLoader } from './knowledge_loader';
+import { TerminalManager } from './terminal';
+
+import crypto from 'crypto';
 
 // Initialize Server
 const server = new McpServer({
     name: "Pentest Knowledge Server",
     version: "1.0.0"
 });
+
+// ... (skipping context, I will target executeTool replacment)
+// Wait, I cannot skip context in replace_file_content effectively if I target imports AND executeTool separately if they are far apart.
+// I will target imports first.
 
 // Setup paths
 const TOOLS_DIR = path.resolve(__dirname, '../tools');
@@ -26,9 +36,41 @@ if (!fs.existsSync(WORKSPACE_DIR)) {
 // Initialize Logic
 const executor = new DockerExecutor();
 const sessionManager = new SessionManager(executor);
+
+// Global transport reference (will be set in run())
+let globalTransport: any = null;
+
+// Initialize Terminal Manager (will receive transport reference later)
+const terminalManager = new TerminalManager(server);
 const knowledgeLoader = new KnowledgeLoader(TOOLS_DIR); // Use tools dir
-const containerConfig = loadContainerConfig();
-// ... (rest of init)
+const containerConfig = Config.containerConfig;
+
+// Terminal Notifications
+// We use setNotificationHandler to register listeners.
+// The SDK requires the schema to contain a 'method' literal to route the notification.
+(server.server as any).setNotificationHandler(z.object({
+    method: z.literal("terminal/input"),
+    params: z.object({
+        sessionId: z.string(),
+        data: z.string()
+    })
+}), async ({ params }: { params: { sessionId: string, data: string } }) => {
+    // The handler receives the full validated message or part of it depending on SDK, 
+    // but usually if we validate the whole object, we get the whole object.
+    terminalManager.handleInput(params.sessionId, params.data);
+});
+
+(server.server as any).setNotificationHandler(z.object({
+    method: z.literal("terminal/resize"),
+    params: z.object({
+        sessionId: z.string(),
+        cols: z.number(),
+        rows: z.number()
+    })
+}), async ({ params }: { params: { sessionId: string, cols: number, rows: number } }) => {
+    await terminalManager.handleResize(params.sessionId, params.cols, params.rows);
+});
+
 
 // ... (existing tools)
 
@@ -55,9 +97,29 @@ server.tool(
     }
 );
 
+// ... (existing tools)
+
 /**
- * Tool: Run Shell
+ * Tool: Start Terminal
  */
+server.tool(
+    "start_terminal",
+    {
+        id: z.string().describe("Session ID to use (frontend generated)"),
+        image: z.string().optional().describe("Image to start")
+    },
+    async ({ id, image }) => {
+        try {
+            await terminalManager.createTerminal(id, image);
+            return {
+                content: [{ type: "text", text: `Terminal started: ${id}` }]
+            };
+        } catch (e: any) {
+            return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
+        }
+    }
+);
+
 server.tool(
     "run_shell",
     {
@@ -128,9 +190,10 @@ server.tool(
     "nmap_scan",
     {
         target: z.string().describe("Target IP or Hostname"),
-        profile: z.enum(["ping", "quick", "full", "versions", "os"]).default("quick").describe("Scan profile")
+        profile: z.enum(["ping", "quick", "full", "versions", "os"]).default("quick").describe("Scan profile"),
+        workspace_id: z.string().optional().describe("Workspace isolation ID")
     },
-    async ({ target, profile }) => {
+    async ({ target, profile, workspace_id }) => {
         // ... (Existing Nmap Logic implementation, reusing execute_command logic internally would be better but let's keep it simple)
         const toolName = "nmap";
         const profiles: Record<string, string[]> = {
@@ -143,7 +206,7 @@ server.tool(
         const args = [...profiles[profile], target];
 
         // Delegate to common execution logic
-        return await executeTool(toolName, args);
+        return await executeTool(toolName, args, workspace_id);
     }
 );
 
@@ -154,9 +217,10 @@ server.tool(
 server.tool(
     "execute_command",
     {
-        command: z.string().describe("Full command to execute (e.g., 'nmap -sV target.com')")
+        command: z.string().describe("Full command to execute (e.g., 'nmap -sV target.com')"),
+        workspace_id: z.string().optional().describe("Workspace isolation ID")
     },
-    async ({ command }) => {
+    async ({ command, workspace_id }) => {
         // 1. Parse Command
         const parts = command.trim().split(/\s+/);
         if (parts.length === 0) {
@@ -169,49 +233,98 @@ server.tool(
         console.error(`MCP: Received execute_command request: ${toolName} args: ${args.join(' ')}`);
 
         // 2. Execute
-        return await executeTool(toolName, args);
+        return await executeTool(toolName, args, workspace_id);
     }
 );
 
 // Helper function to unify execution logic
-async function executeTool(toolName: string, args: string[]) {
+// Helper function to unify execution logic
+// Helper function to unify execution logic
+async function executeTool(toolName: string, args: string[], workspaceId?: string) {
+    // Generate truly unique runId using crypto.randomUUID
+    const runId = crypto.randomUUID();
+    const fullCommand = `${toolName} ${args.join(' ')}`;
+
+    // Determine volume name if workspaceId provided
+    const volumeName = workspaceId ? `pentest-ws-${workspaceId}` : undefined;
+
     try {
         const cmd = [toolName, ...args];
         if (mode === 'docker') {
+            // Real-time logging callback for streaming container output
+            const streamLogger = (data: string) => {
+                // Send real-time output via custom 'tool/log' notification to identify tool source
+                // Use globalTransport if available, otherwise try to use server access
+                if (globalTransport) {
+                    try {
+                        globalTransport.send({
+                            jsonrpc: "2.0",
+                            method: "tool/log",
+                            params: {
+                                tool: toolName,
+                                runId: runId,
+                                command: fullCommand,
+                                data: data,
+                                workspaceId: workspaceId // Pass workspace context
+                            }
+                        });
+                    } catch (e) {
+                        console.error("MCP: Failed to send log notification", e);
+                    }
+                } else {
+                    console.error("MCP: No transport available for logging");
+                }
+            };
+
+            // Helper to send exit status
+            const sendExitStatus = (status: 'completed' | 'failed', error?: string) => {
+                if (globalTransport) {
+                    try {
+                        globalTransport.send({
+                            jsonrpc: "2.0",
+                            method: "tool/exit",
+                            params: {
+                                tool: toolName,
+                                runId: runId,
+                                status: status,
+                                error: error,
+                                workspaceId: workspaceId // Pass workspace context
+                            }
+                        });
+                    } catch (e) {
+                        console.error("MCP: Failed to send exit notification", e);
+                    }
+                }
+            };
+
             // Smart Routing
-            const toolConfig = containerConfig[toolName];
-            if (toolConfig) {
-                const output = await executor.executeEphemeralCaptured(cmd, toolConfig);
-                return {
-                    content: [{
-                        type: "text" as const,
-                        text: output
-                    }]
-                };
-            } else {
-                // Check if 'default' exists in config
-                if (containerConfig.default) {
+            try {
+                const toolConfig = containerConfig[toolName];
+                let output = "";
+                if (toolConfig) {
+                    output = await executor.executeEphemeralCaptured(cmd, toolConfig, streamLogger, volumeName);
+                } else if (containerConfig.default) {
+                    // Default fallback container
                     console.error(`MCP: Routing ${toolName} to default container: ${containerConfig.default.image}`);
-                    const output = await executor.executeEphemeralCaptured(cmd, {
+                    output = await executor.executeEphemeralCaptured(cmd, {
                         ...containerConfig.default,
-                    });
-                    return {
-                        content: [{
-                            type: "text" as const,
-                            text: output
-                        }]
-                    };
+                    }, streamLogger, volumeName);
+                } else {
+                    // Absolute Fallback: Main Sandbox (Long running) - preserving original logic
+                    console.error(`MCP: Tool '${toolName}' not configured. Running in shared sandbox.`);
+                    output = await executor.execute(cmd);
                 }
 
-                // Absolute Fallback: Main Sandbox (Long running)
-                console.error(`MCP: Tool '${toolName}' not configured. Running in shared sandbox.`);
-                const output = await executor.execute(cmd);
+                sendExitStatus('completed');
                 return {
                     content: [{
                         type: "text" as const,
                         text: output
                     }]
                 };
+            } catch (error: any) {
+                sendExitStatus('failed', error.message);
+                throw error;
             }
         } else {
             return {
@@ -339,17 +452,21 @@ async function run() {
     // Load Knowledge
     await knowledgeLoader.registerPrompts(server);
 
-    const hubUrl = process.env.MCP_HUB_URL;
-    const token = process.env.MCP_TOKEN;
+    const hubUrl = Config.mcpHubUrl;
+    const token = Config.mcpToken;
 
     if (hubUrl) {
         console.error(`MCP: Starting in Cloud Mode (Connecting to ${hubUrl})...`);
-        const transport = new WebSocketReverseTransport(hubUrl, token);
+        const transport = new WebSocketReverseTransport(hubUrl, token || "");
+        globalTransport = transport; // Save reference for TerminalManager
+        terminalManager.setTransport(transport); // Pass to TerminalManager
         await server.connect(transport);
         console.error("MCP: Connected to Cloud Hub");
     } else {
         console.error("MCP: Starting in Local Mode (Stdio)");
         const transport = new StdioServerTransport();
+        globalTransport = transport; // Save reference for TerminalManager
+        terminalManager.setTransport(transport); // Pass to TerminalManager
         await server.connect(transport);
     }
 }

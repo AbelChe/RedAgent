@@ -25,7 +25,7 @@ export class WebSocketReverseTransport implements Transport {
             const options: WebSocket.ClientOptions = {};
             if (this._token) {
                 options.headers = {
-                    "Authorization": `Bearer ${this._token}`
+                    "x-mcp-token": this._token
                 };
             }
 
@@ -66,8 +66,19 @@ export class WebSocketReverseTransport implements Transport {
             throw new Error("WebSocket is not connected");
         }
 
-        const text = JSON.stringify(message);
-        this._ws.send(text);
+        // Debug: Log the message type and content to debug serialization issues
+        console.error(`[MCP-TRANSPORT] send() called. Type: ${typeof message}, IsStringObj? ${message instanceof String}`);
+
+        if (typeof message === 'string' || message instanceof String) {
+            // SDK passed a serialized string or String object - send as is
+            console.error(`[MCP-TRANSPORT] Sending string: ${message.toString().substring(0, 100)}...`);
+            this._ws.send(message.toString());
+        } else {
+            // SDK passed an object - stringify it
+            const text = JSON.stringify(message);
+            console.error(`[MCP-TRANSPORT] Stringified to: ${text.substring(0, 150)}...`);
+            this._ws.send(text);
+        }
     }
 
     async close(): Promise<void> {

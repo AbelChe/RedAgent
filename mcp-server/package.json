@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "tsc && node dist/index.js",
     "dev": "ts-node src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -20,7 +20,9 @@
     "dockerode": "^4.0.9",
     "dotenv": "^17.2.3",
     "js-yaml": "^4.1.1",
+    "node-pty": "^1.1.0",
     "puppeteer": "^24.34.0",
+    "ts-node": "^10.9.2",
     "uuid": "^13.0.0",
     "ws": "^8.18.3",
     "zod": "^4.2.1"
