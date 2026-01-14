@@ -1,9 +1,20 @@
 export interface Workspace {
     id: string;
     name: string;
-    mode: 'ask' | 'planning' | 'agent';
+    description?: string;
+    mode: 'ask' | 'planning' | 'agent' | 'sandbox';
     created_at: string;
     config?: Record<string, any>;
+    // Service Stack Info
+    status?: string;
+    mcp_endpoint?: string;
+    code_server_endpoint?: string;
+    mcp_container_id?: string;
+    code_container_id?: string;
+    stats?: {
+        task_count: number;
+        tool_run_count: number;
+    };
 }
 
 export interface CommandResult {
@@ -26,6 +37,7 @@ export interface AgentResult {
 export interface Task {
     id: string;
     workspace_id: string;
+    conversation_id?: string | null;  // Added for conversation support
     command: string;
     mode: 'ask' | 'planning' | 'agent';
     status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'waiting_approval';
