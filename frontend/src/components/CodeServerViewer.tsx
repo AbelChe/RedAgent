@@ -14,10 +14,20 @@ export function CodeServerViewer({ workspaceId, filePath, onClose }: CodeServerV
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Construct code-server URL
-    // We need to translate the workspace-relative path to the actual volume path
-    const volumePath = `/workspaces/workspace_${workspaceId}/_data${filePath.replace('/workspace', '')}`;
-    const codeServerUrl = `http://localhost:8080/?folder=${encodeURIComponent(volumePath)}`;
+    // Construct code-server URL to open the file
+    // File paths from output_injection are like "/workspace/nmap/20260116_123456_target.xml"
+    // Code-server accesses files via the workspace volume mounted at /home/coder/project
+    // So we need to strip the /workspace prefix
+    const relativeFilePath = filePath.startsWith('/workspace/')
+        ? filePath.substring('/workspace/'.length)
+        : filePath;
+
+    // Open file directly in code-server using the file:// URL scheme
+    // Format: http://localhost:PORT/?folder=/home/coder/project&file=/home/coder/project/path/to/file
+    const baseUrl = `http://localhost:8080`;  // TODO: Get this from workspace.code_server_url
+    const folderPath = '/home/coder/project';
+    const fullFilePath = `${folderPath}/${relativeFilePath}`;
+    const codeServerUrl = `${baseUrl}/?folder=${encodeURIComponent(folderPath)}&file=${encodeURIComponent(fullFilePath)}`;
 
     useEffect(() => {
         // Reset states when file changes

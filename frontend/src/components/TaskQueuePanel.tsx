@@ -296,21 +296,22 @@ function JobCard({ job, onCancel, onJobClick, onViewFile }: {
             {/* Output Files */}
             {job.output_files && job.output_files.length > 0 && (
                 <div className="mt-3">
-                    <div className="text-xs text-gray-500 mb-1">📁 Scan Results:</div>
-                    <div className="space-y-1">
+                    <div className="text-xs text-gray-500 mb-1">📁 Output Files ({job.output_files.length}):</div>
+                    <div className="p-2 bg-gray-800/50 border border-gray-700 rounded text-xs text-gray-300 font-mono space-y-1">
                         {job.output_files.map((file, index) => (
                             <div
                                 key={index}
-                                className="flex items-center gap-2 p-2 bg-blue-500/10 border border-blue-500/20 rounded text-xs text-blue-300 font-mono hover:bg-blue-500/20 transition cursor-pointer"
+                                className="flex items-center justify-between gap-2 p-1.5 hover:bg-gray-700/50 rounded transition cursor-pointer"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    onJobClick?.(job.id);
                                     onViewFile?.(job.workspace_id, file);
                                 }}
                                 title={`Click to view: ${file}`}
                             >
-                                <span className="flex-1 truncate">{file.split('/').pop()}</span>
-                                <span className="text-gray-500 text-[10px]">{file.includes('.xml') ? 'XML' : file.includes('.txt') ? 'TXT' : 'DATA'}</span>
+                                <span className="flex-1 truncate">{file}</span>
+                                <span className="text-gray-500 text-[10px] flex-shrink-0">
+                                    {file.endsWith('.xml') ? 'XML' : file.endsWith('.txt') ? 'TXT' : file.endsWith('.nmap') ? 'NMAP' : 'FILE'}
+                                </span>
                             </div>
                         ))}
                     </div>

@@ -23,7 +23,14 @@ const api = axios.create({
 });
 
 export const workspaceService = {
-    create: async (data: { name: string; description?: string; mode: string; config?: Record<string, any> }) => {
+    create: async (data: {
+        name: string;
+        description?: string;
+        mode: string;
+        code_server_url?: string;
+        code_server_password?: string;
+        config?: Record<string, any>
+    }) => {
         const response = await api.post<Workspace>('/workspaces/', data);
         return response.data;
     },
@@ -39,17 +46,19 @@ export const workspaceService = {
         return response.data;
     },
 
-    getConnectionToken: async (id: string): Promise<string> => {
-        const response = await api.post<{ token: string }>(`/workspaces/${id}/connection-token`);
-        return response.data.token;
-    },
 
     listTasks: async (id: string): Promise<Task[]> => {
         const response = await api.get(`/workspaces/${id}/tasks`);
         return response.data;
     },
 
-    update: async (id: string, data: { name?: string; description?: string }): Promise<Workspace> => {
+    update: async (id: string, data: {
+        name?: string;
+        description?: string;
+        code_server_url?: string;
+        code_server_password?: string;
+        config?: Record<string, any>;
+    }): Promise<Workspace> => {
         const response = await api.patch(`/workspaces/${id}`, data);
         return response.data;
     },
@@ -65,6 +74,31 @@ export const workspaceService = {
 
     runCommand: async (workspaceId: string, command: string): Promise<void> => {
         await api.post(`/workspaces/${workspaceId}/commands/run`, { command });
+    },
+
+    getMcpConnectionInfo: async (workspaceId: string): Promise<{
+        workspace_id: string;
+        mcp_ws_url: string;
+        mcp_token: string;
+        code_server_password: string;
+        code_server_url: string;
+        docker_compose_yml: string;
+    }> => {
+        const response = await api.get(`/workspaces/${workspaceId}/mcp-connection-info`);
+        return response.data;
+    },
+
+    regenerateMcpToken: async (workspaceId: string): Promise<{
+        workspace_id: string;
+        mcp_token: string;
+        mcp_ws_url: string;
+        code_server_password: string;
+        code_server_url: string;
+        docker_compose_yml: string;
+        message: string;
+    }> => {
+        const response = await api.post(`/workspaces/${workspaceId}/regenerate-mcp-token`);
+        return response.data;
     }
 };
 

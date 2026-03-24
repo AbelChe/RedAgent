@@ -7,6 +7,7 @@ export interface Workspace {
     config?: Record<string, any>;
     // Service Stack Info
     status?: string;
+    code_server_url?: string;  // User-configured Code Server URL
     mcp_endpoint?: string;
     code_server_endpoint?: string;
     mcp_container_id?: string;

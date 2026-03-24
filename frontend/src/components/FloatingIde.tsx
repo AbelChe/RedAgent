@@ -24,23 +24,23 @@ export function FloatingIde({ workspace, isMinimized, onMinimizeChange, onClose 
     useEffect(() => {
         const init = async () => {
             try {
-                // Auto-login flow
-                const token = await workspaceService.getConnectionToken(workspace.id);
-                // Set cookie (shared domain logic: localhost cookies usually share across ports)
-                document.cookie = `code-server-session=${token}; path=/; max-age=86400; SameSite=Lax`;
+                // User manages Code Server deployment, we just embed the URL
+                // Default to localhost:8080 if not configured
+                const codeServerUrl = workspace.code_server_url || 'http://localhost:8080';
 
-                const targetUrl = new URL(workspace.code_server_endpoint || "");
+                // Adjust hostname to match current window location for iframe embedding
+                const targetUrl = new URL(codeServerUrl);
                 targetUrl.hostname = window.location.hostname;
                 setIframeUrl(targetUrl.toString());
             } catch (e) {
                 console.error(e);
-                setError("Failed to authenticate with Code Server.");
+                setError("Failed to load Code Server URL.");
             } finally {
                 setLoading(false);
             }
         };
         init();
-    }, [workspace.id]);
+    }, [workspace.id, workspace.code_server_url]);
 
     const pillRef = useRef<HTMLDivElement>(null);
 

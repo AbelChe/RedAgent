@@ -12,7 +12,7 @@ import { Settings } from 'lucide-react';
 import { Workspace } from '@/types';
 import { workspaceService } from '@/services/api';
 
-export function Sidebar() {
+export function ConversationSidebar() {
     const params = useParams();
     const router = useRouter();
     const workspaceId = params?.id as string;
@@ -321,15 +321,6 @@ export function Sidebar() {
                         {/* Collapsible Content */}
                         {!isFooterCollapsed && (
                             <div className="p-3 pt-0 space-y-3">
-                                {/* Home Button */}
-                                <button
-                                    onClick={() => router.push('/')}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-                                >
-                                    <ChevronsLeft className="w-4 h-4" />
-                                    <span>Back to Home</span>
-                                </button>
-
                                 {/* Settings Button (Full Width) */}
                                 <button
                                     onClick={() => router.push(`/workspace/${workspaceId}/settings`)}
@@ -353,13 +344,6 @@ export function Sidebar() {
                     </>
                 ) : (
                     <div className="p-3 space-y-4">
-                        <button
-                            onClick={() => router.push('/')}
-                            className="w-8 h-8 mx-auto flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-                            title="Back to Home"
-                        >
-                            <ChevronsLeft className="w-4 h-4" />
-                        </button>
                         <button
                             onClick={() => router.push(`/workspace/${workspaceId}/settings`)}
                             className="w-8 h-8 mx-auto flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
