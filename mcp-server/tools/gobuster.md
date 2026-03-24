@@ -78,6 +78,8 @@ gobuster vhost -u <url> -w <wordlist>
 | `-k` | Skip TLS verification |
 | `-o` | Output file |
 
+> Standard text output is auto-persisted by ResultStore. For file output, use `-o gobuster/<filename>` to save to the workspace volume.
+
 ---
 
 ## Common Wordlists (Parrot OS)
@@ -87,6 +89,58 @@ gobuster vhost -u <url> -w <wordlist>
 | `/usr/share/wordlists/dirb/big.txt` | Large directory list |
 | `/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt` | DirBuster medium |
 | `/usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt` | SecLists directories |
+
+---
+
+## Output Parsing
+
+### Sample Output
+```
+===============================================================
+Gobuster v3.6
+by OJ Reeves (@TheColonial) & Christian Mehlmauer (@firefart)
+===============================================================
+[+] Url:                     http://192.168.1.10
+[+] Method:                  GET
+[+] Threads:                 10
+[+] Wordlist:                /usr/share/wordlists/dirb/common.txt
+[+] Status codes:            200,204,301,302,307,401,403
+===============================================================
+Starting gobuster in directory enumeration mode
+===============================================================
+/.htaccess            (Status: 403) [Size: 278]
+/.htpasswd            (Status: 403) [Size: 278]
+/admin                (Status: 301) [Size: 316] [--> http://192.168.1.10/admin/]
+/api                  (Status: 301) [Size: 314] [--> http://192.168.1.10/api/]
+/backup               (Status: 200) [Size: 1024]
+/config               (Status: 403) [Size: 278]
+/login                (Status: 200) [Size: 4521]
+/uploads              (Status: 301) [Size: 318] [--> http://192.168.1.10/uploads/]
+
+===============================================================
+Finished
+===============================================================
+```
+
+### Parsing Rules
+- Format: `/<path> (Status: <code>) [Size: <bytes>] [--> <redirect>]`
+- Status 200 = accessible content, investigate further
+- Status 301/302 = redirect, follow the `-->` URL
+- Status 403 = forbidden but exists, may be accessible with auth
+- Status 401 = requires authentication
+- Size helps distinguish real pages from error pages (filter identical sizes)
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| Login page found | `hydra` for brute-force | `hydra -l admin -P wordlist.txt target http-post-form "..."` |
+| API directory found | `ffuf` for API fuzzing | `ffuf -u http://target/api/FUZZ -w api-wordlist.txt` |
+| Admin panel found | `nikto` for deeper scan | `nikto -h http://target/admin/` |
+| Upload directory | Test file upload vuln | `curl -F "file=@shell.php" http://target/uploads/` |
+| Backup files found | `curl`/`wget` to download | `curl http://target/backup -o backup.zip` |
 
 ---
 
@@ -105,14 +159,3 @@ gobuster vhost -u <url> -w <wordlist>
 | `invalid certificate` | Self-signed cert | Use `-k` flag |
 | `connection refused` | Target down | Verify target is up |
 | `too many open files` | Thread limit | Reduce `-t` value |
-
----
-
-## Output Parsing
-Output format: `/<path> (Status: <code>) [Size: <bytes>]`
-
-Filter interesting results:
-```bash
-gobuster dir -u <url> -w <wordlist> -o results.txt
-grep "Status: 200" results.txt
-```

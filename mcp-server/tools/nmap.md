@@ -79,7 +79,53 @@ nmap -sS <target>
 | `-oX` | XML | Machine parsing, report tools |
 | `-oA` | All | Saves all 3 formats |
 
-**Recommended:** Use `-oG -` for inline grepable output.
+> For structured output files, use `-oA nmap/<target>` to write XML/grepable/normal files to the workspace volume. Standard text output is auto-persisted by ResultStore.
+
+---
+
+## Output Parsing
+
+### Sample Output
+```
+Starting Nmap 7.94 ( https://nmap.org ) at 2024-01-15 10:30 UTC
+Nmap scan report for 192.168.1.10
+Host is up (0.0032s latency).
+
+PORT     STATE  SERVICE    VERSION
+22/tcp   open   ssh        OpenSSH 8.9p1 Ubuntu 3ubuntu0.4 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey:
+|   256 xx:xx:xx:xx (ECDSA)
+|_  256 xx:xx:xx:xx (ED25519)
+80/tcp   open   http       Apache httpd 2.4.52 ((Ubuntu))
+|_http-title: Default Page
+|_http-server-header: Apache/2.4.52 (Ubuntu)
+443/tcp  open   ssl/http   Apache httpd 2.4.52
+3306/tcp closed mysql
+8080/tcp open   http-proxy
+
+Nmap done: 1 IP address (1 host up) scanned in 12.34 seconds
+```
+
+### Parsing Rules
+- Port table starts with `PORT` header line
+- Extract columns: `PORT`, `STATE`, `SERVICE`, `VERSION`
+- Open ports have `STATE = open`; closed/filtered ports are usually not interesting
+- VERSION column → identify software for vulnerability lookups
+- Script output (indented `|` lines) → additional info from NSE scripts
+- `Nmap done:` line = scan summary
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| Open HTTP/HTTPS ports | `nikto`, `gobuster`, `ffuf` | `nikto -h http://target:80` |
+| Open SSH port | `hydra`, `ncrack`, `medusa` | `hydra -l root -P wordlist.txt target ssh` |
+| Service versions found | `nuclei`, `msfconsole` | `nuclei -u http://target -severity critical,high` |
+| Open SMB ports (445) | `msfconsole` | `use auxiliary/scanner/smb/smb_version` |
+| Multiple hosts alive | `masscan` for wider port scan | `masscan <range> -p1-65535 --rate 1000` |
+| OS detected | Document for reporting | N/A |
 
 ---
 
@@ -98,10 +144,3 @@ nmap -sS <target>
 | `Host seems down` | ICMP blocked | Use `-Pn` to skip ping |
 | `Permission denied` | SYN/OS scan needs root | Run with `sudo` |
 | `Note: Host is up (latency)` | Normal | Target is reachable |
-
----
-
-## Parsing Tips
-- Port table starts with `PORT` header line
-- Extract columns: `PORT`, `STATE`, `SERVICE`, `VERSION`
-- Open ports have `STATE = open`

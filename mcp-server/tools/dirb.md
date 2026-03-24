@@ -87,6 +87,58 @@ dirb <url> -N 404
 
 ---
 
+## Output Parsing
+
+### Sample Output
+```
+-----------------
+DIRB v2.22
+By The Dark Raver
+-----------------
+
+START_TIME: Mon Jan 15 10:30:00 2024
+URL_BASE: http://192.168.1.10/
+WORDLIST_FILES: /usr/share/dirb/wordlists/common.txt
+
+-----------------
+
+GENERATED WORDS: 4614
+
+---- Scanning URL: http://192.168.1.10/ ----
++ http://192.168.1.10/admin (CODE:301|SIZE:316)
++ http://192.168.1.10/cgi-bin/ (CODE:403|SIZE:278)
++ http://192.168.1.10/index.html (CODE:200|SIZE:11321)
++ http://192.168.1.10/server-status (CODE:403|SIZE:278)
+
+---- Entering directory: http://192.168.1.10/admin/ ----
++ http://192.168.1.10/admin/index.html (CODE:200|SIZE:4521)
++ http://192.168.1.10/admin/login.php (CODE:200|SIZE:2103)
+
+-----------------
+END_TIME: Mon Jan 15 10:35:22 2024
+DOWNLOADED: 9228 - FOUND: 6
+```
+
+### Parsing Rules
+- `+ URL (CODE:xxx|SIZE:xxx)` = discovered resource
+- CODE 200 = accessible; CODE 301 = redirect; CODE 403 = forbidden but exists
+- `Entering directory:` = recursive scan into subdirectory
+- `DOWNLOADED: N - FOUND: M` = summary (total requests vs findings)
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| Login page found | `hydra` for brute-force | `hydra -l admin -P wordlist.txt target http-post-form "..."` |
+| Admin panel found | `nikto` for vuln scan | `nikto -h http://target/admin/` |
+| CGI directory found | Test for Shellshock | `nmap --script http-shellshock -p 80 target` |
+| Server-status exposed | Direct access for info | `curl http://target/server-status` |
+| Need faster scanning | Switch to `gobuster` | `gobuster dir -u http://target -w wordlist.txt -t 50` |
+
+---
+
 ## Safety Warnings
 | Risk | Description |
 |------|-------------|

@@ -21,7 +21,11 @@ export class WebSocketReverseTransport implements Transport {
     }
 
     async start(): Promise<void> {
-        return new Promise((resolve, reject) => {
+        return this.connect();
+    }
+
+    private async connect(): Promise<void> {
+        return new Promise((resolve) => {
             const options: WebSocket.ClientOptions = {};
             if (this._token) {
                 options.headers = {
@@ -38,13 +42,23 @@ export class WebSocketReverseTransport implements Transport {
 
             this._ws.on("error", (err) => {
                 console.error(`MCP: Connection Error: ${err.message}`);
+                // Error listener allows "close" to trigger for cleanup
                 if (this.onerror) this.onerror(err);
-                reject(err);
             });
 
-            this._ws.on("close", () => {
-                console.error("MCP: Connection Closed");
-                if (this.onclose) this.onclose();
+            this._ws.on("close", (code, reason) => {
+                console.error(`MCP: Connection Closed. Code: ${code}, Reason: ${reason}`);
+                // If Auth failed (1008), do not reconnect.
+                if (code === 1008) {
+                    console.error("MCP: Fatal Authentication Error. Exiting.");
+                    if (this.onclose) this.onclose();
+                    process.exit(1);
+                } else {
+                    console.error("MCP: Reconnecting in 5s...");
+                    setTimeout(() => {
+                        this.connect().catch(e => console.error("Reconnection failed", e));
+                    }, 5000);
+                }
             });
 
             this._ws.on("message", (data) => {

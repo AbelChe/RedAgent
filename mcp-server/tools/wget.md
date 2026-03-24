@@ -1,79 +1,126 @@
-# wget - 网络文件下载工具
+# wget - Network File Download Tool
 
-## 概述
-| 属性 | 值 |
-|------|-----|
-| 二进制 | `wget` |
-| 类别 | 信息收集、文件下载 |
-| 风险等级 | 低 |
+## Overview
+| Attribute | Value |
+|-----------|-------|
+| Binary | `wget` |
+| Category | Information Gathering, File Download |
+| Risk Level | Low |
 
-## 描述
-wget 是一个非交互式网络下载工具，支持 HTTP、HTTPS、FTP 协议。支持递归下载、断点续传和后台运行。
+## Description
+wget is a non-interactive network download tool supporting HTTP, HTTPS, and FTP protocols. It supports recursive downloads, resume capability, and background operation. Commonly used for downloading files, mirroring websites, and retrieving exposed resources.
 
 ---
 
-## 使用场景
+## Usage Patterns
 
-### 1. 下载文件
+### 1. Download a File
+**Goal:** Download a single file from a URL.
 ```bash
 wget http://target.com/file.zip
 ```
 
-### 2. 指定保存文件名
+### 2. Custom Output Filename
+**Goal:** Save with a specific filename.
 ```bash
 wget -O custom_name.zip http://target.com/file.zip
 ```
 
-### 3. 断点续传
+### 3. Resume Interrupted Download
+**Goal:** Continue a partially downloaded file.
 ```bash
 wget -c http://target.com/large_file.zip
 ```
 
-### 4. 后台下载
+### 4. Background Download
+**Goal:** Download in the background.
 ```bash
 wget -b http://target.com/file.zip
 ```
 
-### 5. 递归下载网站
+### 5. Recursive Download
+**Goal:** Spider and download a website recursively.
 ```bash
 wget -r -l 3 http://target.com
 ```
-- `-r`: 递归下载
-- `-l 3`: 限制深度为 3 层
+- `-r`: Enable recursive download
+- `-l 3`: Limit depth to 3 levels
 
-### 6. 下载整个网站（镜像）
+### 6. Mirror Entire Website
+**Goal:** Create a local copy of a website.
 ```bash
 wget --mirror -p --convert-links http://target.com
 ```
 
-### 7. 忽略 SSL 证书
+### 7. Skip SSL Certificate Verification
+**Goal:** Download from sites with invalid certificates.
 ```bash
 wget --no-check-certificate https://target.com
 ```
 
-### 8. 限速下载
+### 8. Rate-Limited Download
+**Goal:** Limit download speed to avoid detection.
 ```bash
 wget --limit-rate=100k http://target.com/file.zip
 ```
 
 ---
 
-## 常用选项
-| 选项 | 说明 |
-|------|------|
-| `-O` | 指定输出文件名 |
-| `-c` | 断点续传 |
-| `-b` | 后台运行 |
-| `-r` | 递归下载 |
-| `-l` | 递归深度 |
-| `-p` | 下载页面所需资源 |
-| `--mirror` | 镜像模式 |
-| `-q` | 静默模式 |
-| `--limit-rate` | 限制下载速度 |
-| `--no-check-certificate` | 忽略 SSL 证书 |
+## Common Options
+| Option | Description |
+|--------|-------------|
+| `-O` | Specify output filename |
+| `-c` | Resume interrupted download |
+| `-b` | Run in background |
+| `-r` | Recursive download |
+| `-l` | Recursion depth limit |
+| `-p` | Download page prerequisites (CSS, images) |
+| `--mirror` | Mirror mode (recursive + timestamps) |
+| `-q` | Quiet mode |
+| `--limit-rate` | Limit download speed |
+| `--no-check-certificate` | Skip SSL verification |
 
 ---
 
-## 安全提示
-- 递归下载可能下载大量数据，注意磁盘空间
-- 镜像模式可能触发目标防护机制
+## Output Parsing
+
+### Sample Output
+```
+--2024-01-15 10:30:00--  http://target.com/file.zip
+Resolving target.com... 192.168.1.10
+Connecting to target.com|192.168.1.10|:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 1048576 (1.0M) [application/zip]
+Saving to: 'file.zip'
+
+file.zip            100%[===================>]   1.00M  5.00MB/s    in 0.2s
+
+2024-01-15 10:30:01 (5.00 MB/s) - 'file.zip' saved [1048576/1048576]
+```
+
+### Parsing Rules
+- Status code appears in `HTTP request sent, awaiting response...` line
+- `Length:` = file size and MIME type
+- Progress bar shows download progress
+- Final summary shows speed and saved byte count
+- Recursive downloads log each file individually
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| Website mirrored | Manual analysis, `grep` | Search downloaded files for credentials |
+| Backup files downloaded | `python3` to parse | `python3 -c "print(open('config.bak').read())"` |
+| Git repo dumped | Git tools to extract | `git log`, `git show` on dumped repo |
+| Sensitive files found | Document for reporting | N/A |
+
+---
+
+## Safety Warnings
+| Risk | Description |
+|------|-------------|
+| **Disk Space** | Recursive downloads can consume large amounts of storage |
+| **Detection** | Mirror mode may trigger target defense mechanisms |
+| **Legal** | Only download from authorized targets |

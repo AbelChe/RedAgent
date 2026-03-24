@@ -101,6 +101,57 @@ ffuf -u http://target.com/FUZZ -w <wordlist> -fl 5   # Filter by line count
 
 ---
 
+## Output Parsing
+
+### Sample Output
+```
+        /'___\  /'___\           /'___\
+       /\ \__/ /\ \__/  __  __  /\ \__/
+       \ \ ,__\\ \ ,__\/\ \/\ \ \ \ ,__\
+        \ \ \_/ \ \ \_/\ \ \_\ \ \ \ \_/
+         \ \_\   \ \_\  \ \____/  \ \_\
+          \/_/    \/_/   \/___/    \/_/
+
+       v2.1.0
+________________________________________________
+
+ :: Method           : GET
+ :: URL              : http://192.168.1.10/FUZZ
+ :: Wordlist         : FUZZ: /usr/share/wordlists/dirb/common.txt
+ :: Follow redirects : false
+ :: Timeout          : 10
+ :: Threads          : 40
+ :: Matcher          : Response status: 200,204,301,302,307,401,403,405
+________________________________________________
+
+admin                   [Status: 301, Size: 316, Words: 20, Lines: 10, Duration: 12ms]
+api                     [Status: 200, Size: 1847, Words: 95, Lines: 42, Duration: 8ms]
+config                  [Status: 403, Size: 278, Words: 20, Lines: 10, Duration: 5ms]
+login                   [Status: 200, Size: 4521, Words: 234, Lines: 67, Duration: 15ms]
+:: Progress: [4614/4614] :: Job [1/1] :: 850 req/sec :: Duration: [0:00:06] :: Errors: 0 ::
+```
+
+### Parsing Rules
+- Format: `<path> [Status: <code>, Size: <bytes>, Words: <n>, Lines: <n>, Duration: <ms>]`
+- Use `-fs` to filter common error page sizes
+- Use `-fc` to filter status codes (e.g., `-fc 404`)
+- JSON output (`-of json`) provides structured results for pipeline processing
+- Words/Lines counts help distinguish real pages from generic error responses
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| Hidden paths found | `nikto` for vuln scan | `nikto -h http://target/path` |
+| API endpoints found | `sqlmap` for injection | `sqlmap -u "http://target/api/endpoint?param=1"` |
+| Subdomains found (vhost) | `nmap` for port scan | `nmap -sV subdomain.target.com` |
+| Login page found | `hydra` for brute-force | `hydra target http-post-form "..."` |
+| Config files found | `curl` to download | `curl http://target/config` |
+
+---
+
 ## Safety Warnings
 | Risk | Description |
 |------|-------------|
@@ -108,11 +159,3 @@ ffuf -u http://target.com/FUZZ -w <wordlist> -fl 5   # Filter by line count
 | **Detection** | May trigger WAF/rate limiting |
 
 > **Tip:** Use `-t 10` and `-rate 100` for stealth.
-
----
-
-## Output Parsing
-JSON output (`-of json`) is recommended for parsing:
-```bash
-ffuf -u http://target.com/FUZZ -w wordlist.txt -o results.json -of json
-```

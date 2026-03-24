@@ -102,6 +102,42 @@ Common sets:
 
 ---
 
+## Output Parsing
+
+### Sample Output
+```
+Crunch will now generate the following amount of data: 50000 bytes
+0 MB
+0 GB
+0 TB
+0 PB
+Crunch will now generate the following number of lines: 10000
+
+aaaa
+aaab
+aaac
+...
+```
+
+### Parsing Rules
+- Header shows estimated data size and line count
+- Output is one word per line
+- Pipe directly to tools: `crunch ... | hydra -l admin -P - target ssh`
+- `-o` saves to file instead of stdout
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| Wordlist generated | `hydra` for brute-force | `hydra -l admin -P wordlist.txt target ssh` |
+| PIN list generated | `hydra` for PIN testing | `hydra -l admin -P pins.txt target http-post-form "..."` |
+| Custom patterns made | `medusa`/`ncrack` | `medusa -h target -u admin -P custom.txt -M ssh` |
+| Wordlist too large | Narrow with `-s`/`-e` or pattern | `crunch 8 8 -t admin%%%` |
+
+---
+
 ## Safety Warnings
 | Warning | Description |
 |---------|-------------|

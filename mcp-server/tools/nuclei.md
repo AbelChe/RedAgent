@@ -1,92 +1,142 @@
-# Nuclei - 快速漏洞扫描器
+# Nuclei - Fast Vulnerability Scanner
 
-## 概述
-| 属性 | 值 |
-|------|-----|
-| 二进制 | `nuclei` |
-| 类别 | 漏洞扫描 |
-| 风险等级 | 中 |
+## Overview
+| Attribute | Value |
+|-----------|-------|
+| Binary | `nuclei` |
+| Category | Vulnerability Scanning |
+| Risk Level | Medium |
 
-## 描述
-Nuclei 是一个基于模板的快速漏洞扫描器，使用 YAML 模板定义扫描规则，支持大规模并发扫描。
+## Description
+Nuclei is a fast, template-based vulnerability scanner that uses YAML templates to define scanning rules. It supports large-scale concurrent scanning across multiple protocols and is widely used for automated security assessments.
 
 ---
 
-## 使用场景
+## Usage Patterns
 
-### 1. 基础扫描
+### 1. Basic Scan
+**Goal:** Run a default scan against a single target.
 ```bash
 nuclei -u http://target.com
 ```
+**Example:** `nuclei -u http://192.168.1.10`
 
-### 2. 批量目标扫描
+### 2. Bulk Target Scan
+**Goal:** Scan multiple targets from a file.
 ```bash
 nuclei -l targets.txt
 ```
 
-### 3. 使用特定模板
+### 3. Scan with Specific Templates
+**Goal:** Run only specific template categories (e.g., known CVEs).
 ```bash
 nuclei -u http://target.com -t cves/
 ```
 
-### 4. 按严重程度过滤
+### 4. Filter by Severity
+**Goal:** Limit results to critical and high severity.
 ```bash
 nuclei -u http://target.com -severity critical,high
 ```
 
-### 5. 按标签过滤
+### 5. Filter by Tags
+**Goal:** Run templates matching specific tags (e.g., RCE, SQLi).
 ```bash
 nuclei -u http://target.com -tags rce,sqli
 ```
 
-### 6. 更新模板库
+### 6. Update Template Library
+**Goal:** Download the latest community templates.
 ```bash
 nuclei -update-templates
 ```
 
-### 7. 输出结果
+### 7. Output Results
+**Goal:** Save results to file in text or JSON format.
 ```bash
 nuclei -u http://target.com -o results.txt
 nuclei -u http://target.com -json -o results.json
 ```
 
-### 8. 限制并发
+### 8. Rate Limiting and Concurrency
+**Goal:** Control scan speed to avoid overwhelming targets.
 ```bash
 nuclei -u http://target.com -c 10 -rl 50
 ```
-- `-c`: 并发数
-- `-rl`: 每秒请求数
+- `-c`: Concurrent templates to execute
+- `-rl`: Maximum requests per second
 
 ---
 
-## 常用选项
-| 选项 | 说明 |
-|------|------|
-| `-u` | 单个目标 URL |
-| `-l` | 目标列表文件 |
-| `-t` | 模板路径 |
-| `-tags` | 按标签过滤 |
-| `-severity` | 按严重程度过滤 |
-| `-c` | 并发数 |
-| `-rl` | 速率限制 |
-| `-o` | 输出文件 |
-| `-json` | JSON 输出 |
-| `-silent` | 静默模式 |
-| `-update-templates` | 更新模板 |
+## Common Options
+| Option | Description |
+|--------|-------------|
+| `-u` | Single target URL |
+| `-l` | File containing target URLs |
+| `-t` | Template path or directory |
+| `-tags` | Filter templates by tag |
+| `-severity` | Filter by severity level |
+| `-c` | Number of concurrent templates |
+| `-rl` | Rate limit (requests/second) |
+| `-o` | Output file path |
+| `-json` | Enable JSON output |
+| `-silent` | Silent mode (findings only) |
+| `-update-templates` | Update templates to latest |
 
 ---
 
-## 严重程度
-- `info` - 信息
-- `low` - 低危
-- `medium` - 中危
-- `high` - 高危
-- `critical` - 严重
+## Severity Levels
+- `info` — Informational (service detection, technology fingerprinting)
+- `low` — Low risk (minor misconfigurations, information disclosure)
+- `medium` — Medium risk (significant misconfigurations, potential data exposure)
+- `high` — High risk (exploitable vulnerabilities, default credentials)
+- `critical` — Critical risk (remote code execution, authentication bypass)
 
 ---
 
-## 安全提示
-| 风险 | 说明 |
-|------|------|
-| **流量** | 大规模扫描产生大量请求 |
-| **检测** | 某些模板会触发 WAF |
+## Output Parsing
+
+### Sample Output
+```
+[2024-01-15 10:45:32] [apache-detect] [http] [info] http://192.168.1.10:80 [Apache/2.4.52]
+[2024-01-15 10:45:33] [tech-detect:php] [http] [info] http://192.168.1.10:80
+[2024-01-15 10:45:35] [cve-2021-44228] [http] [critical] http://192.168.1.10:8080 [Apache Log4j RCE]
+[2024-01-15 10:45:36] [git-config] [http] [medium] http://192.168.1.10:80/.git/config
+[2024-01-15 10:45:38] [default-login:tomcat] [http] [high] http://192.168.1.10:8080/manager [tomcat:tomcat]
+```
+
+### Parsing Rules
+- **Format:** `[timestamp] [template-id] [protocol] [severity] url [extra-info]`
+- **Severity levels:** `info`, `low`, `medium`, `high`, `critical`
+- **Extra info in brackets** = matched data (version, credentials, CVE details)
+- **JSON output** (`-json`) returns structured objects with full template metadata including template ID, name, author, severity, matched-at URL, extracted data, and timestamps.
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| Critical/High CVEs | `msfconsole` for exploitation | `search cve:2021-44228` |
+| Default credentials found | Manual verification, `curl` | `curl -u tomcat:tomcat http://target:8080/manager` |
+| Exposed .git/config | `wget` for repo dump | `wget -r http://target/.git/` |
+| Technology detected | `sqlmap` for injection testing | `sqlmap -u "http://target/page?id=1"` |
+| Info-level findings | Document for reporting | N/A |
+
+---
+
+## Safety Warnings
+| Risk | Description |
+|------|-------------|
+| **Traffic Volume** | Large-scale scans generate heavy request volume and may degrade services. |
+| **WAF Detection** | Certain templates actively probe for vulnerabilities and will trigger WAF/IDS alerts. |
+
+---
+
+## Common Errors & Solutions
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `Could not find template` | Invalid template path | Run `nuclei -update-templates` |
+| `context deadline exceeded` | Target not responding | Verify target reachability; increase `-timeout` |
+| `rate limit exceeded` | Too many requests | Lower `-c` and `-rl` values |
+| `no templates loaded` | Filters too narrow | Broaden `-tags` or `-severity` filters |

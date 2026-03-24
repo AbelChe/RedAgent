@@ -108,23 +108,55 @@ done >> custom_passwords.txt
 
 ---
 
+## Output Parsing
+
+### Sample Output (Default)
+```
+company
+services
+technology
+solutions
+innovation
+digital
+platform
+security
+management
+enterprise
+```
+
+### Sample Output (with `-c` flag)
+```
+15, company
+12, services
+8, technology
+6, solutions
+5, innovation
+```
+
+### Parsing Rules
+- Default: one word per line, sorted by frequency (most common first)
+- With `-c`: shows count followed by word
+- With `-e`: emails appear in separate output or `--email_file`
+- Words are deduplicated and filtered by minimum length (`-m`)
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| Custom wordlist generated | `hydra` for targeted brute-force | `hydra -l admin -P company_words.txt target ssh` |
+| Emails harvested | OSINT research | Document for social engineering |
+| Company terms found | `crunch` for variations | `crunch` to add numbers/symbols to base words |
+| Short wordlist | Increase depth (`-d`) or combine | `cewl -d 5 -m 4 http://target` |
+
+---
+
 ## Safety Warnings
 | Risk | Description |
 |------|-------------|
 | **Traffic** | Deep spidering generates many requests |
 | **Detection** | Crawler pattern may trigger alerts |
-
----
-
-## Output
-Default output: One word per line, sorted by frequency.
-
-With `-c` flag: Shows count of each word.
-```
-15, company
-12, services
-8, contact
-```
 
 ---
 

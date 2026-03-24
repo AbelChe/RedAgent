@@ -15,9 +15,14 @@ COPY tsconfig.json ./
 RUN npm install
 
 # Copy source code
+# COPY . . (Source code)
 COPY src ./src
-COPY tools ./tools
-COPY containers.yaml ./containers.yaml
+# We DO NOT copy tools or containers.yaml anymore. They are mounted at runtime.
+# COPY tools ./tools
+# COPY containers.yaml ./containers.yaml
+
+# Create config directory for volume mount
+RUN mkdir -p /app/config
 
 # Build TypeScript
 RUN npm run build

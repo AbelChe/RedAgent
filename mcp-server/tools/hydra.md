@@ -95,6 +95,42 @@ hydra -l administrator -P passwords.txt <target> rdp
 
 ---
 
+## Output Parsing
+
+### Sample Output
+```
+Hydra v9.5 (c) 2023 by van Hauser/THC & David Maciejak
+
+Hydra (https://github.com/vanhauser-thc/thc-hydra) starting at 2024-01-15 10:30:00
+[DATA] max 16 tasks per 1 server, overall 16 tasks, 14344399 login tries (l:1/p:14344399), ~896525 tries per task
+[DATA] attacking ssh://192.168.1.10:22/
+[STATUS] 128.00 tries/min, 128 tries in 00:01h, 14344271 to do in 1868:28h, 16 active
+[22][ssh] host: 192.168.1.10   login: root   password: toor
+1 of 1 target successfully completed, 1 valid password found
+Hydra (https://github.com/vanhauser-thc/thc-hydra) finished at 2024-01-15 10:35:22
+```
+
+### Parsing Rules
+- `[port][protocol] host: ... login: ... password: ...` = **found credentials** (key line)
+- `[STATUS]` lines = progress updates (tries/min, remaining time)
+- `[ERROR]` lines = connection failures
+- `valid password found` = success summary
+- `-o` flag writes results to file for later reference
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| SSH credentials found | Direct SSH login | `ssh root@target` |
+| HTTP credentials found | `curl` to access panel | `curl -u admin:pass http://target/admin` |
+| FTP credentials found | FTP login for file access | `curl ftp://target -u user:pass` |
+| No valid passwords | Try larger wordlist or `cewl` | `cewl -d 3 -m 6 -w custom.txt http://target` |
+| Account lockout hit | Reduce threads | `hydra ... -t 1` |
+
+---
+
 ## Safety Warnings
 | Risk | Description |
 |------|-------------|
@@ -112,11 +148,3 @@ hydra -l administrator -P passwords.txt <target> rdp
 | `Connection refused` | Service down or wrong port | Verify port with nmap |
 | `Too many connections` | Rate limiting | Reduce `-t` value |
 | `Invalid protocol` | Unsupported service | Check `hydra -h` for protocols |
-
----
-
-## Output Parsing
-Success format:
-```
-[22][ssh] host: 192.168.1.10   login: root   password: toor
-```

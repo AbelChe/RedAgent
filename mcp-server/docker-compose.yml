@@ -2,27 +2,46 @@ version: '3.8'
 
 services:
   mcp-server:
-    build: .
-    container_name: mcp-server-manager
+    image: diudiudiuuuu/redagent-mcp-server:latest
+    container_name: mcp-server-${WORKSPACE_ID:-default}
     volumes:
-      # CRITICAL: Allow container to control host Docker
+      # Use named volume for workspace data (shared with code-server)
+      - workspace-data:/app/workspace_data
+      # CRITICAL: Allow MCP to manage Docker containers (for tool execution)
       - /var/run/docker.sock:/var/run/docker.sock
-      
-      # Use named volume for workspace data (safer than bind mount)
-      # This prevents malicious files from landing on host filesystem
-      - redagent-workspace:/app/workspace_data
-      
-      # Map host config (assuming relative path from mcp-server dir)
-      - ../backend/app/config/containers.yaml:/app/config/containers.yaml
     environment:
-      # Volume name for ephemeral containers to mount
-      - WORKSPACE_VOLUME_NAME=redagent-workspace
-    env_file: .env.docker
-    restart: always
-    stdin_open: true # Keep stdin open for MCP communication if running interactively
-    tty: true
+      - WORKSPACE_VOLUME_NAME=workspace-data
+      - WORKSPACE_ID=${WORKSPACE_ID:-default}
+      - MCP_HUB_URL=${MCP_HUB_URL}
+      - MCP_TOKEN=${MCP_TOKEN}
+    restart: unless-stopped
+    networks:
+      - workspace-network
 
-# Define named volume for secure workspace data sharing
+  code-server:
+    image: codercom/code-server:latest
+    container_name: code-server-${WORKSPACE_ID:-default}
+    volumes:
+      # Share the same workspace volume with mcp-server
+      - workspace-data:/home/coder/project
+    working_dir: /home/coder/project
+    environment:
+      - TZ=Etc/UTC
+      - PASSWORD=${CODE_SERVER_PASSWORD:-changeme}
+    ports:
+      - "${CODE_SERVER_PORT:-8080}:8080"
+    restart: unless-stopped
+    networks:
+      - workspace-network
+    command: --auth password --disable-telemetry
+
+# Define named volumes for data persistence
 volumes:
-  redagent-workspace:
+  workspace-data:
     driver: local
+
+# Define network for inter-service communication
+networks:
+  workspace-network:
+    driver: bridge
+

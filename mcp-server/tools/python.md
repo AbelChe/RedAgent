@@ -1,77 +1,84 @@
-# Python - 数据分析与脚本执行
+# Python - Data Analysis & Script Execution
 
-## 概述
-| 属性 | 值 |
-|------|-----|
-| 二进制 | `python3` / `python` |
-| 类别 | 数据分析、脚本执行 |
-| 风险等级 | 低 |
+## Overview
+| Attribute | Value |
+|-----------|-------|
+| Binary | `python3` / `python` |
+| Category | Data Analysis, Script Execution |
+| Risk Level | Low |
 
-## 描述
-Python 用于数据处理、结果分析、自定义脚本执行。在渗透测试中常用于处理扫描结果、编写自动化脚本。
+## Description
+Python is used for data processing, result analysis, and custom script execution. In penetration testing, it is commonly used to parse scan results, write automation scripts, encode/decode data, and create simple utilities.
 
 ---
 
-## 使用场景
+## Usage Patterns
 
-### 1. 执行脚本
+### 1. Execute Script
+**Goal:** Run a Python script file.
 ```bash
 python3 script.py
 ```
 
-### 2. 一行命令
+### 2. One-Liner Command
+**Goal:** Execute a quick inline command.
 ```bash
 python3 -c "print('Hello')"
 ```
 
-### 3. 解析 JSON 结果
+### 3. Parse JSON Results
+**Goal:** Extract data from scan output in JSON format.
 ```bash
 python3 -c "import json; data=json.load(open('scan.json')); print(data['hosts'])"
 ```
 
-### 4. Base64 编解码
+### 4. Base64 Encode/Decode
+**Goal:** Encode or decode Base64 data.
 ```bash
-# 编码
+# Encode
 python3 -c "import base64; print(base64.b64encode(b'payload').decode())"
 
-# 解码
+# Decode
 python3 -c "import base64; print(base64.b64decode('cGF5bG9hZA==').decode())"
 ```
 
-### 5. 简单 HTTP 服务器
+### 5. Simple HTTP Server
+**Goal:** Serve files over HTTP for payload delivery.
 ```bash
 python3 -m http.server 8000
 ```
 
-### 6. 处理 CSV 文件
+### 6. Process CSV Files
+**Goal:** Read and display CSV data.
 ```bash
 python3 -c "import csv; [print(row) for row in csv.reader(open('data.csv'))]"
 ```
 
-### 7. 正则提取
+### 7. Regex Extraction
+**Goal:** Extract patterns (e.g., IP addresses) from text files.
 ```bash
 python3 -c "import re; print(re.findall(r'\d+\.\d+\.\d+\.\d+', open('log.txt').read()))"
 ```
 
 ---
 
-## 常用模块
-| 模块 | 用途 |
-|------|------|
-| `json` | JSON 处理 |
-| `csv` | CSV 处理 |
-| `re` | 正则表达式 |
-| `base64` | 编解码 |
-| `hashlib` | 哈希计算 |
-| `socket` | 网络编程 |
-| `requests` | HTTP 请求 |
-| `subprocess` | 执行命令 |
+## Common Modules
+| Module | Purpose |
+|--------|---------|
+| `json` | JSON parsing and generation |
+| `csv` | CSV file processing |
+| `re` | Regular expressions |
+| `base64` | Base64 encoding/decoding |
+| `hashlib` | Hash computation (MD5, SHA) |
+| `socket` | Network programming |
+| `requests` | HTTP requests (if installed) |
+| `subprocess` | Execute system commands |
 
 ---
 
-## 与其他工具配合
+## Integration with Other Tools
 
-### 解析 Nmap XML 输出
+### Parse Nmap XML Output
 ```bash
 python3 -c "
 import xml.etree.ElementTree as ET
@@ -83,7 +90,7 @@ for host in tree.findall('.//host'):
 "
 ```
 
-### 处理目录扫描结果
+### Filter Directory Scan Results
 ```bash
 cat gobuster.txt | python3 -c "
 import sys
@@ -95,7 +102,46 @@ for line in sys.stdin:
 
 ---
 
-## 安全提示
-- Python 容器环境为最小化镜像
-- 某些第三方库可能不可用
-- 可通过 pip 安装额外依赖（如果网络允许）
+## Output Parsing
+
+### Sample Output (JSON Parsing)
+```
+$ python3 -c "import json; data=json.load(open('scan.json')); print(json.dumps(data, indent=2))"
+{
+  "hosts": [
+    {"ip": "192.168.1.10", "ports": [22, 80, 443]},
+    {"ip": "192.168.1.11", "ports": [22, 3306]}
+  ]
+}
+```
+
+### Sample Output (IP Extraction)
+```
+$ python3 -c "import re; print(re.findall(r'\d+\.\d+\.\d+\.\d+', open('log.txt').read()))"
+['192.168.1.10', '192.168.1.11', '10.0.0.1']
+```
+
+### Parsing Rules
+- Python output varies depending on the script
+- Use `json.dumps(data, indent=2)` for pretty-printing JSON
+- Use `-c` for one-liners; scripts for complex analysis
+- Combine with `sys.stdin` to process piped output from other tools
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| IP list extracted | `nmap`/`masscan` to scan | `nmap -iL targets.txt` |
+| Parsed scan results | Continue pentest workflow | Use appropriate tool for findings |
+| Custom exploit script | `msfconsole` for listener | `use exploit/multi/handler` |
+| HTTP server started | Deliver payloads | Upload via target vulnerability |
+
+---
+
+## Safety Warnings
+| Risk | Description |
+|------|-------------|
+| **Container Environment** | Python runs in a minimal Docker container. |
+| **Third-Party Libraries** | Some packages may not be available; install via `pip` if network allows. |

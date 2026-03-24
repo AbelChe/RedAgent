@@ -1,3 +1,5 @@
+docker-compose-test.yaml
+
 # Dependencies
 node_modules/
 .pnp
@@ -13,6 +15,7 @@ build/
 .env.local
 .env.*.local
 *.env
+.env.mcp
 
 # Debug
 npm-debug.log*
@@ -39,6 +42,7 @@ coverage/
 *.js.map
 
 # Workspace data (may contain sensitive scan results)
+workspace_data
 workspace_data/*
 !workspace_data/.gitkeep
 

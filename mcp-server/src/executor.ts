@@ -73,10 +73,16 @@ export class DockerExecutor {
     }
 
     // Revised executeEphemeral to capture output
-    async executeEphemeralCaptured(command: string[], config: ContainerConfig, onData?: (data: string) => void, volumeName?: string): Promise<string> {
+    async executeEphemeralCaptured(command: string[], config: ContainerConfig, onData?: (data: string) => void, volumeName?: string, signal?: AbortSignal): Promise<string> {
         // Use Docker named volume for secure workspace sharing
         const targetVolume = volumeName || process.env.WORKSPACE_VOLUME_NAME || 'redagent-workspace';
         console.error(`🚀 [MCP-EDGE] STARTING TOOL: ${command.join(' ')} (Image: ${config.image})`);
+
+        // Check if already aborted before starting
+        if (signal?.aborted) {
+            console.error(`⚠️ [MCP-EDGE] Request already cancelled, skipping: ${command.join(' ')}`);
+            return 'Cancelled: request was aborted before execution started.';
+        }
 
         try {
             // We use createContainer directly to control auto-remove and streams better
@@ -96,6 +102,24 @@ export class DockerExecutor {
             await container.start();
 
             let output = '';
+            let aborted = false;
+
+            // Listen for abort signal — stop the container when client cancels
+            const onAbort = () => {
+                if (aborted) return;
+                aborted = true;
+                console.error(`🛑 [MCP-EDGE] CANCELLED by client, stopping container: ${command.join(' ')}`);
+                container.stop({ t: 2 }).catch((err: any) => {
+                    // Container may have already exited or been auto-removed
+                    if (err.statusCode !== 304 && err.statusCode !== 404) {
+                        console.error(`⚠️ [MCP-EDGE] Error stopping container: ${err.message}`);
+                    }
+                });
+            };
+
+            if (signal) {
+                signal.addEventListener('abort', onAbort, { once: true });
+            }
 
             // Stream handler with real-time callback support (like docker logs -f)
             stream.on('data', (chunk: Buffer) => {
@@ -111,6 +135,16 @@ export class DockerExecutor {
             });
 
             await container.wait();
+
+            // Clean up abort listener
+            if (signal) {
+                signal.removeEventListener('abort', onAbort);
+            }
+
+            if (aborted) {
+                console.error(`🛑 [MCP-EDGE] ABORTED: ${command.join(' ')}`);
+                return output + '\n\n⚠️ Scan was cancelled by user.';
+            }
 
             console.error(`✅ [MCP-EDGE] COMPLETED: ${command.join(' ')}`);
             return output;
@@ -154,9 +188,10 @@ export class DockerExecutor {
             AttachStdout: true,
             AttachStderr: true,
             HostConfig: {
-                Binds: [`${volumeName}:/data`],
-                AutoRemove: true, // Be careful with AutoRemove if we want to inspect after
-            }
+                Binds: [`${volumeName}:/workspace`],  // Changed from /data to /workspace
+                AutoRemove: true,
+            },
+            WorkingDir: '/workspace'  // Set working directory to match mount point
         });
 
         // Attach stream BEFORE starting to capture initial output

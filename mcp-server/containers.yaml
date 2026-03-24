@@ -1,139 +1,210 @@
 # 容器镜像映射配置
-# 定义工具与容器镜像的对应关系及安全配置
+# 定义工具与容器镜像的对应关系、安全配置及风险分级
+#
+# risk_level: low / medium / high / critical
+#   low      → 只读侦察，自动放行
+#   medium   → 可能产生副作用，自动放行但记录日志
+#   high     → 密码爆破等高风险操作，需人工审批
+#   critical → 漏洞利用/武器化，必须人工审批
 
 # 默认配置（当工具未找到时使用）
 default:
   image: parrotsec/security:7.0
-  async: false  # Default to sync execution
+  async: false
+  risk_level: medium
+  requires_approval: false
   capabilities:
     - NET_RAW
   memory_limit: 512m
   cpu_limit: 1.0
   pids_limit: 100
 
-# 端口扫描工具
+# ── 端口扫描工具（侦察类） ──
 nmap:
   image: parrotsec/security:7.0
-  async: true  # Long-running port scanning
+  async: true
+  risk_level: low
+  requires_approval: false
   capabilities:
     - NET_RAW
+  output: nmap
 
 masscan:
   image: parrotsec/security:7.0
-  async: true  # Fast port scanning but can be long
+  async: true
+  risk_level: low
+  requires_approval: false
   capabilities:
     - NET_RAW
   memory_limit: 1g
+  output: masscan
 
-# 目录爆破工具
+# ── 目录爆破工具 ──
 gobuster:
   image: parrotsec/security:7.0
-  async: true  # Directory bruteforce
+  async: true
+  risk_level: medium
+  requires_approval: false
   capabilities: []
+  output: gobuster
 
 dirb:
   image: parrotsec/security:7.0
-  async: true  # Directory bruteforce
+  async: true
+  risk_level: medium
+  requires_approval: false
   capabilities: []
+  output: dirb
 
 ffuf:
   image: parrotsec/security:7.0
-  async: true  # Fuzzing tool
+  async: true
+  risk_level: medium
+  requires_approval: false
   capabilities: []
+  output: ffuf
 
-# 字典生成工具
+# ── 字典生成工具 ──
 crunch:
   image: parrotsec/security:7.0
-  async: false  # Fast utility
+  async: false
+  risk_level: low
+  requires_approval: false
   capabilities: []
+  output: crunch
   memory_limit: 256m
 
 cewl:
   image: parrotsec/security:7.0
-  async: false  # Web scraping utility
+  async: false
+  risk_level: low
+  requires_approval: false
   capabilities: []
+  output: cewl
 
-# 口令爆破工具
+# ── 口令爆破工具（高风险） ──
 hydra:
   image: parrotsec/security:7.0
-  async: true  # Password cracking
+  async: true
+  risk_level: high
+  requires_approval: true
   capabilities:
     - NET_RAW
+  output: hydra
 
 medusa:
   image: parrotsec/security:7.0
-  async: true  # Password cracking
+  async: true
+  risk_level: high
+  requires_approval: true
   capabilities:
     - NET_RAW
+  output: medusa
 
 ncrack:
   image: parrotsec/security:7.0
-  async: true  # Password cracking
+  async: true
+  risk_level: high
+  requires_approval: true
   capabilities:
     - NET_RAW
+  output: ncrack
 
-# 数据分析工具
+# ── 数据分析工具 ──
 python:
   image: python:3.11-slim
-  async: false  # Script execution
+  async: false
+  risk_level: medium
+  requires_approval: false
   capabilities: []
+  output: python
   memory_limit: 1g
 
 python3:
   image: python:3.11-slim
-  async: false  # Script execution
+  async: false
+  risk_level: medium
+  requires_approval: false
   capabilities: []
+  output: python3
   memory_limit: 1g
 
-# 漏洞利用工具
+# ── 漏洞利用工具（关键风险） ──
 msfconsole:
-  image: metasploitframework/metasploit-framework:latest
-  async: true  # Exploitation framework
+  image: metasploitframework/metasploit-framework:6.4.0
+  async: true
+  risk_level: critical
+  requires_approval: true
   capabilities:
     - NET_RAW
     - NET_ADMIN
+  output: msfconsole
   memory_limit: 2g
   cpu_limit: 2.0
 
 msfvenom:
-  image: metasploitframework/metasploit-framework:latest
-  async: false  # Payload generation
+  image: metasploitframework/metasploit-framework:6.4.0
+  async: false
+  risk_level: critical
+  requires_approval: true
   capabilities: []
+  output: msfvenom
   memory_limit: 1g
 
-# 信息收集工具
+# ── 信息收集工具 ──
 curl:
   image: parrotsec/security:7.0
-  async: false  # Quick HTTP request
+  async: false
+  risk_level: low
+  requires_approval: false
   capabilities: []
+  output: curl
 
 wget:
   image: parrotsec/security:7.0
-  async: false  # Quick download
+  async: false
+  risk_level: low
+  requires_approval: false
   capabilities: []
+  output: wget
 
 whois:
   image: parrotsec/security:7.0
-  async: false  # Domain lookup
+  async: false
+  risk_level: low
+  requires_approval: false
   capabilities: []
+  output: whois
 
 dig:
   image: parrotsec/security:7.0
-  async: false  # DNS lookup
+  async: false
+  risk_level: low
+  requires_approval: false
   capabilities: []
+  output: dig
 
-# Web 漏洞扫描
+# ── Web 漏洞扫描 ──
 nikto:
   image: parrotsec/security:7.0
-  async: true  # Web vulnerability scanner
+  async: true
+  risk_level: medium
+  requires_approval: false
   capabilities: []
+  output: nikto
 
 sqlmap:
   image: parrotsec/security:7.0
-  async: true  # SQL injection testing
+  async: true
+  risk_level: critical
+  requires_approval: true
   capabilities: []
+  output: sqlmap
 
 nuclei:
-  image: projectdiscovery/nuclei:latest
-  async: true  # Vulnerability scanner
+  image: projectdiscovery/nuclei:v3.6.2
+  async: true
+  risk_level: high
+  requires_approval: true
   capabilities: []
+  output: nuclei

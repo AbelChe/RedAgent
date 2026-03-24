@@ -124,6 +124,41 @@ ncrack -iX results.xml -U users.txt -P passwords.txt
 
 ---
 
+## Output Parsing
+
+### Sample Output
+```
+Starting Ncrack 0.7 ( http://ncrack.org ) at 2024-01-15 10:30 UTC
+
+Discovered credentials for ssh on 192.168.1.10 22/tcp:
+192.168.1.10 22/tcp ssh: 'root' 'toor'
+
+Discovered credentials for rdp on 192.168.1.20 3389/tcp:
+192.168.1.20 3389/tcp rdp: 'administrator' 'P@ssw0rd'
+
+Ncrack done: 2 services scanned in 120.00 seconds.
+Ncrack finished.
+```
+
+### Parsing Rules
+- `Discovered credentials for <service> on <host> <port>/<proto>:` = success header
+- `<host> <port>/<proto> <service>: '<user>' '<pass>'` = **credential pair**
+- `Ncrack done:` = scan summary with service count and duration
+- XML output (`-oX`) provides structured results
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| SSH credentials found | Direct login | `ssh root@192.168.1.10` |
+| RDP credentials found | RDP client access | Document for manual testing |
+| Credentials from nmap input | Test across all services | `ncrack -iX nmap.xml -U users.txt -P pass.txt` |
+| No credentials found | Expand wordlist with `cewl` | `cewl -d 3 http://target -w custom.txt` |
+
+---
+
 ## Safety Warnings
 | Risk | Description |
 |------|-------------|
@@ -145,12 +180,3 @@ ncrack -iX results.xml -U users.txt -P passwords.txt
 | Stability | Good | Good | Excellent |
 
 > **Recommendation:** Use Ncrack when working with Nmap scan results.
-
----
-
-## Output Parsing
-Success format:
-```
-Discovered credentials for ssh on 192.168.1.10 22/tcp:
-192.168.1.10 22/tcp ssh: 'root' 'toor'
-```

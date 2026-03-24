@@ -1,74 +1,124 @@
-# dig - DNS 查询工具
+# dig - DNS Query Tool
 
-## 概述
-| 属性 | 值 |
-|------|-----|
-| 二进制 | `dig` |
-| 类别 | 信息收集、DNS 枚举 |
-| 风险等级 | 低 |
+## Overview
+| Attribute | Value |
+|-----------|-------|
+| Binary | `dig` |
+| Category | Information Gathering, DNS Enumeration |
+| Risk Level | Low |
 
-## 描述
-dig (Domain Information Groper) 是一个灵活的 DNS 查询工具，用于查询 DNS 记录、调试 DNS 问题。
+## Description
+dig (Domain Information Groper) is a flexible DNS query tool used to look up DNS records, debug DNS issues, and enumerate DNS infrastructure during reconnaissance.
 
 ---
 
-## 使用场景
+## Usage Patterns
 
-### 1. 查询 A 记录
+### 1. Query A Record
+**Goal:** Resolve a domain to its IP address(es).
 ```bash
 dig target.com
 ```
 
-### 2. 查询特定记录类型
+### 2. Query Specific Record Types
+**Goal:** Look up different DNS record types.
 ```bash
-dig target.com MX      # 邮件服务器
-dig target.com NS      # DNS 服务器
-dig target.com TXT     # TXT 记录
-dig target.com CNAME   # 别名记录
-dig target.com SOA     # 权威记录
-dig target.com ANY     # 所有记录
+dig target.com MX      # Mail servers
+dig target.com NS      # Name servers
+dig target.com TXT     # TXT records (SPF, DKIM)
+dig target.com CNAME   # Alias records
+dig target.com SOA     # Start of Authority
+dig target.com ANY     # All records
 ```
 
-### 3. 指定 DNS 服务器
+### 3. Specify DNS Server
+**Goal:** Query a specific resolver instead of the system default.
 ```bash
 dig @8.8.8.8 target.com
 ```
 
-### 4. 反向 DNS 查询
+### 4. Reverse DNS Lookup
+**Goal:** Find the hostname for an IP address.
 ```bash
 dig -x 8.8.8.8
 ```
 
-### 5. 简洁输出
+### 5. Short Output
+**Goal:** Get only the answer values (concise output).
 ```bash
 dig target.com +short
 ```
 
-### 6. 跟踪 DNS 解析路径
+### 6. Trace DNS Resolution Path
+**Goal:** Follow the full DNS resolution chain from root servers.
 ```bash
 dig target.com +trace
 ```
 
-### 7. 区域传输（AXFR）
+### 7. Zone Transfer (AXFR)
+**Goal:** Attempt to dump all DNS records from a nameserver.
 ```bash
 dig @ns1.target.com target.com AXFR
 ```
-> 注意：大多数服务器禁用 AXFR
+> **Note:** Most servers disable AXFR; success reveals all subdomains.
 
 ---
 
-## 常用选项
-| 选项 | 说明 |
-|------|------|
-| `@server` | 指定 DNS 服务器 |
-| `-x` | 反向查询 |
-| `+short` | 简洁输出 |
-| `+trace` | 跟踪解析路径 |
-| `+noall +answer` | 只显示答案部分 |
-| `-t` | 指定记录类型 |
+## Common Options
+| Option | Description |
+|--------|-------------|
+| `@server` | Specify DNS server |
+| `-x` | Reverse lookup (IP → hostname) |
+| `+short` | Concise output (answer values only) |
+| `+trace` | Trace resolution path |
+| `+noall +answer` | Show only the answer section |
+| `-t` | Specify record type |
 
 ---
 
-## 安全提示
-- 被动信息收集，不会触发告警
-- AXFR 区域传输可能暴露大量子域名
+## Output Parsing
+
+### Sample Output
+```
+; <<>> DiG 9.18.18 <<>> target.com
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 12345
+;; flags: qr rd ra; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+
+;; ANSWER SECTION:
+target.com.          300     IN      A       192.168.1.10
+target.com.          300     IN      A       192.168.1.11
+
+;; Query time: 15 msec
+;; SERVER: 8.8.8.8#53(8.8.8.8)
+;; WHEN: Mon Jan 15 10:30:00 UTC 2024
+;; MSG SIZE  rcvd: 72
+```
+
+### Parsing Rules
+- `ANSWER SECTION:` contains the DNS records
+- `status: NOERROR` = successful query; `NXDOMAIN` = domain not found
+- `+short` flag gives only the answer values (IPs, hostnames)
+- Multiple A records may indicate load balancing or CDN
+- `300` (second column) = TTL in seconds
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| IP addresses resolved | `nmap` for port scan | `nmap -sV 192.168.1.10` |
+| MX records found | Check mail security | `nmap -p 25,465,587 mail.target.com` |
+| NS records found | Zone transfer attempt | `dig @ns1.target.com target.com AXFR` |
+| Multiple IPs (CDN) | `bee_addr_query` for CDN check | Use bee_addr_query tool |
+| TXT records (SPF/DKIM) | Document for reporting | N/A |
+
+---
+
+## Safety Warnings
+| Risk | Description |
+|------|-------------|
+| **Passive** | DNS queries are passive reconnaissance — generally do not alert the target. |
+| **AXFR** | Zone transfers are more intrusive and may be logged by the nameserver. |

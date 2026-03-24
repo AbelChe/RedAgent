@@ -56,7 +56,49 @@ masscan <target> -p<ports> --excludefile exclude.txt
 | `-oG` | Grepable | Compatible with nmap tools |
 | `-oX` | XML | Report generation |
 
-**Recommended:** `-oJ -` for JSON to stdout.
+> Standard text output is auto-persisted by ResultStore. For structured output, use `-oJ masscan/<filename>.json` to write JSON to the workspace volume.
+
+---
+
+## Output Parsing
+
+### Sample Output (Text)
+```
+Starting masscan 1.3.2 (http://bit.ly/14GZzcT) at 2024-01-15 10:30:00 GMT
+Initiating SYN Stealth Scan
+Scanning 256 hosts [3 ports/host]
+Discovered open port 80/tcp on 192.168.1.10
+Discovered open port 443/tcp on 192.168.1.10
+Discovered open port 22/tcp on 192.168.1.15
+Discovered open port 8080/tcp on 192.168.1.20
+Discovered open port 3306/tcp on 192.168.1.25
+```
+
+### Sample Output (JSON with `-oJ`)
+```json
+[
+  {"ip": "192.168.1.10", "timestamp": "1705312200", "ports": [{"port": 80, "proto": "tcp", "status": "open", "reason": "syn-ack", "ttl": 64}]},
+  {"ip": "192.168.1.10", "timestamp": "1705312201", "ports": [{"port": 443, "proto": "tcp", "status": "open", "reason": "syn-ack", "ttl": 64}]}
+]
+```
+
+### Parsing Rules
+- `Discovered open port` lines = found open ports
+- JSON format provides structured data with IP, port, protocol, and TTL
+- `--banners` output adds service info after port discovery
+- Use JSON output for pipeline processing with other tools
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| Open ports discovered | `nmap` for service detection | `nmap -sV -p 80,443 192.168.1.10` |
+| Web ports (80/443/8080) | `nikto`, `gobuster` | `nikto -h http://192.168.1.10` |
+| SSH port found | `hydra`/`ncrack` | `hydra -l root -P wordlist.txt target ssh` |
+| Database ports (3306/5432) | `hydra` for DB brute-force | `hydra -l root -P wordlist.txt target mysql` |
+| Large number of hosts | Filter and prioritize | Focus on hosts with most open ports |
 
 ---
 

