@@ -22,6 +22,8 @@ class ContainerConfig:
     cpu_limit: float = 1.0
     pids_limit: int = 100
     network_mode: Optional[str] = None
+    risk_level: str = "medium"        # low / medium / high / critical
+    requires_approval: bool = False
 
 
 # 配置文件路径
@@ -93,6 +95,8 @@ def _load_registry() -> Dict[str, ContainerConfig]:
                 cpu_limit=config.get("cpu_limit", DEFAULT_CONFIG.cpu_limit),
                 pids_limit=config.get("pids_limit", DEFAULT_CONFIG.pids_limit),
                 network_mode=config.get("network_mode"),
+                risk_level=config.get("risk_level", "medium"),
+                requires_approval=config.get("requires_approval", False),
             )
         
         # 验证工具文档完整性

@@ -28,6 +28,59 @@ current_workspace_id: contextvars.ContextVar[Optional[str]] = contextvars.Contex
 _executor_context: Dict[str, SandboxExecutor] = {}
 
 
+async def _execute_job_in_process(job_id: str, command: str, workspace_id: str, executor: SandboxExecutor):
+    """
+    Execute a job in the current process and update its status.
+    This runs in the API process where WebSocket connections are available.
+    """
+    from app.core.database import AsyncSessionLocal
+    from app.models.job import Job, JobStatus
+    from datetime import datetime
+    
+    try:
+        # Update job to RUNNING
+        async with AsyncSessionLocal() as db:
+            job = await db.get(Job, job_id)
+            if job:
+                job.status = JobStatus.RUNNING
+                job.started_at = datetime.utcnow()
+                await db.commit()
+        
+        logger.info(f"[In-Process] Executing job {job_id}: {command}")
+        
+        # Execute command
+        result: CommandResult = await executor.execute(
+            command,
+            workspace_id=workspace_id
+        )
+        
+        # Update job to COMPLETED or FAILED
+        async with AsyncSessionLocal() as db:
+            job = await db.get(Job, job_id)
+            if job:
+                job.status = JobStatus.COMPLETED if result.success else JobStatus.FAILED
+                job.exit_code = result.exit_code
+                job.stdout = result.stdout
+                job.stderr = result.stderr
+                job.completed_at = datetime.utcnow()
+                if result.output_files:
+                    job.output_files = result.output_files
+                await db.commit()
+                
+        logger.info(f"[In-Process] Job {job_id} completed with exit code {result.exit_code}")
+        
+    except Exception as e:
+        logger.error(f"[In-Process] Job {job_id} failed: {e}")
+        # Update job to FAILED
+        async with AsyncSessionLocal() as db:
+            job = await db.get(Job, job_id)
+            if job:
+                job.status = JobStatus.FAILED
+                job.error_message = str(e)
+                job.completed_at = datetime.utcnow()
+                await db.commit()
+
+
 def set_executor_context(
     task_id: str,
     executor: SandboxExecutor,
@@ -73,13 +126,13 @@ async def execute_command(command: str) -> str:
     if len(command) > 5000:
         return "错误: 命令过长 (最大 5000 字符)"
 
-    # 检查是否为异步工具
+    # Check for async tools (long-running scans)
     from app.utils.command_parser import extract_tool_name
     from app.config.tool_config import is_async_tool
     
     tool_name = extract_tool_name(command)
     if tool_name and is_async_tool(tool_name):
-        # 异步工具：提交到任务队列
+        # Async tool: Create job and execute in-process (not Celery)
         try:
             from app.core.database import AsyncSessionLocal
             from app.services.jobs_service import JobsService
@@ -91,24 +144,28 @@ async def execute_command(command: str) -> str:
                     command=command,
                     priority=5,
                     agent_id="agent",
-                    task_id=task_id
+                    task_id=task_id,
+                    dispatch_to_celery=False  # Execute in-process, not via Celery
                 )
                 
-                logger.info(f"[异步] 任务 {task_id} 命令已提交到队列: Job ID {job.id}")
+                logger.info(f"[异步-队列] Job {job.id} created, executing in API process")
+                
+                # Launch background execution in current process
+                asyncio.create_task(_execute_job_in_process(job.id, command, workspace_id, executor))
                 
                 return (
-                    f"✅ 扫描任务已提交到队列执行\n\n"
+                    f"✅ 扫描任务已创建并在后台执行\n\n"
                     f"**任务ID**: {job.id[:8]}...\n"
                     f"**工具**: {tool_name}\n"
                     f"**命令**: {command}\n"
-                    f"**状态**: 等待执行\n\n"
-                    f"💡 此工具需要较长时间运行，已在后台异步执行。\n"
-                    f"您可以在右侧「Queue」面板查看任务进度。"
+                    f"**状态**: 正在执行（非阻塞）\n\n"
+                    f"💡 此工具在主进程中异步运行，您可以在右侧「Queue」面板查看进度。"
                 )
         except Exception as e:
-            logger.error(f"[异步] 提交任务到队列失败: {str(e)}")
-            # 失败时回退到同步执行
-            logger.warning(f"[异步] 回退到同步执行模式")
+            logger.error(f"[异步] 创建任务失败: {str(e)}")
+            # Fallback to synchronous execution
+            logger.warning(f"[异步] 回退到同步执行")
+
 
     # 同步执行（快速工具或异步失败）
     try:
@@ -161,13 +218,19 @@ async def lookup_tool_usage(tool_name: str) -> str:
     """
     from app.services.connection_manager import manager
     
+    # Get workspace ID from context
+    workspace_id = current_workspace_id.get()
+    
     if not manager.mcp_connection:
         return "Error: Knowledge Base (MCP) is disconnected. Please rely on your internal knowledge or use `execute_command` with `--help`."
+        
+    if not workspace_id:
+        return "Error: Workspace ID missing from context. Cannot query usage."
     
     try:
         # Prompt names in MCP are prefixed with "usage-"
         prompt_name = f"usage-{tool_name.lower().strip()}"
-        content = await manager.get_mcp_prompt(prompt_name)
+        content = await manager.get_mcp_prompt(workspace_id, prompt_name)
         
         if not content:
             return f"No usage guide found for '{tool_name}'. Try running `{tool_name} --help`."
@@ -176,3 +239,4 @@ async def lookup_tool_usage(tool_name: str) -> str:
     except Exception as e:
         logger.error(f"Failed to fetch tool usage: {e}")
         return f"Error retrieving usage for {tool_name}: {e}"
+

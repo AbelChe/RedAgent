@@ -70,12 +70,27 @@ class SandboxExecutor(BaseExecutor):
         # 1. Try MCP Delegation (Modern Architecture)
         if manager.mcp_connection:
             try:
-                logger.info(f"📡 [DELEGATION-START] Sending to Edge Node: {command}")
+                if not workspace_id:
+                    raise ValueError("Workspace ID is required for MCP execution")
+
+                # Inject output flags for tools like nmap, masscan, etc.
+                tool_name = extract_tool_from_command(command)
+                modified_command, output_files = inject_output_flags(
+                    command, 
+                    tool_name, 
+                    workspace_manager.WORKSPACE_MOUNT_PATH
+                )
+                
+                if output_files:
+                    logger.info(f"📁 Output files will be saved to: {output_files}")
+
+                logger.info(f"📡 [DELEGATION-START] Sending to Edge Node: {modified_command}")
                 # Call 'execute_command' tool on MCP Server
                 mcp_result = await manager.call_mcp_tool(
+                    workspace_id,
                     "execute_command", 
                     {
-                        "command": command,
+                        "command": modified_command,  # Use modified command with output flags
                         "workspace_id": workspace_id
                     },
                     timeout=3600 # Long timeout for scans
@@ -93,31 +108,21 @@ class SandboxExecutor(BaseExecutor):
                     success=not is_error,
                     exit_code=1 if is_error else 0, # MCP doesn't strictly return exit code in standard response
                     stdout=stdout,
-                    stderr=""
+                    stderr="",
+                    output_files=output_files  # Include output files in result
                 )
             except Exception as e:
-                logger.error(f"MCP Execution Failed: {e}. Falling back to local.")
-                # Fallback to local if MCP call fails (optional, or just fail)
-                # return CommandResult(success=False, exit_code=-1, stdout="", stderr=f"MCP Error: {e}")
+                logger.error(f"MCP Execution Failed: {e}.")
+                raise e
         
-        # 2. Local Fallback (Legacy / Standalone Mode)
-        logger.info("Using Local Docker Execution (No MCP connected)")
-        loop = asyncio.get_running_loop()
-        
-        try:
-            result = await loop.run_in_executor(
-                None,
-                partial(self._execute_sync, command, workspace_id)
-            )
-            return result
-        except Exception as e:
-            logger.error(f"命令执行失败: {e}")
-            return CommandResult(
-                success=False,
-                exit_code=-1,
-                stdout="",
-                stderr=str(e)
-            )
+        # 2. Local Fallback STRICTLY DISABLED
+        logger.error("🛑 Security Violation: Attempted to execute locally while MCP is disconnected.")
+        raise ConnectionError("MCP Server is not connected. Execution rejected for security.")
+
+        # Legacy Local Execution Code (Dead Code / Disabled)
+        # logger.info("Using Local Docker Execution (No MCP connected)")
+        # loop = asyncio.get_running_loop()
+        # ...
     
     def _execute_sync(
         self,

@@ -18,10 +18,11 @@ class JobsService:
         command: str,
         priority: int = 5,
         agent_id: Optional[str] = None,
-        task_id: Optional[str] = None
+        task_id: Optional[str] = None,
+        dispatch_to_celery: bool = True  # NEW: Control Celery dispatch
     ) -> Job:
         """
-        Create a new job and submit to Celery queue.
+        Create a new job and optionally submit to Celery queue.
         
         Args:
             workspace_id: Workspace ID
@@ -29,6 +30,7 @@ class JobsService:
             priority: Job priority (0-10, higher = more important)
             agent_id: Optional agent identifier
             task_id: Optional parent task ID
+            dispatch_to_celery: If True, submit to Celery queue. If False, caller handles execution.
         
         Returns:
             Created Job object
@@ -48,12 +50,13 @@ class JobsService:
         await self.db.commit()
         await self.db.refresh(job)
         
-        # Submit to Celery queue
-        execute_tool_task.apply_async(
-            args=[command, workspace_id, job.id],
-            task_id=job.id,
-            priority=priority
-        )
+        # Submit to Celery queue only if requested
+        if dispatch_to_celery:
+            execute_tool_task.apply_async(
+                args=[command, workspace_id, job.id],
+                task_id=job.id,
+                priority=priority
+            )
         
         return job
     

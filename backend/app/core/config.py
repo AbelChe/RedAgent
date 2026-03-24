@@ -23,9 +23,10 @@ class Settings(BaseSettings):
     MCP_TOKEN: str = "dev-token-placeholder"
     
     # MCP Connectivity
-    # Default to host.docker.internal for Mac/Dev to allow container -> host access
-    # In production, set this to ws://backend:8000 or external URL
+    # For user-deployed MCP containers: use host.docker.internal to connect back to platform
+    # For production: set to ws://your-domain.com:8000 or internal service URL
     MCP_BACKEND_URL: str = "ws://host.docker.internal:8000"
+
 
     @property
     def api_key(self):

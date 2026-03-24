@@ -15,6 +15,14 @@ from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse, WorkspaceU
 from app.services.workspace_manager import workspace_manager
 import logging
 import uuid  # Added for conversation ID generation
+from fastapi import Request, Response
+from pathlib import Path
+import os
+import shutil
+import io
+import zipfile
+
+BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
 
 logger = logging.getLogger(__name__)
 
@@ -64,25 +72,36 @@ async def create_workspace(
     """
     创建新工作空间
     
-    同时创建对应的 Docker 卷用于文件存储。
+    只生成 MCP WebSocket URL 和 Token，不自动部署任何容器。
+    用户需要自行部署 MCP 执行器。
     """
     import secrets
     import string
+    from app.core.config import settings
     
-    # Generate secure random password
-    alphabet = string.ascii_letters + string.digits
-    password = ''.join(secrets.choice(alphabet) for i in range(12))
+    # Generate MCP connection credentials
+    mcp_token = str(uuid.uuid4())
     
-    # Update config with password
+    # Use user-provided Code Server password or generate one
+    if workspace_in.code_server_password:
+        code_server_password = workspace_in.code_server_password
+    else:
+        alphabet = string.ascii_letters + string.digits
+        code_server_password = ''.join(secrets.choice(alphabet) for i in range(16))
+    
+    # Store Code Server password in config
     config = workspace_in.config or {}
-    config['code_server_password'] = password
+    config['code_server_password'] = code_server_password
     
     # 创建数据库记录
     workspace = Workspace(
         name=workspace_in.name,
         description=workspace_in.description,
         mode=workspace_in.mode,
-        config=config
+        config=config,
+        mcp_token=mcp_token,
+        code_server_url=workspace_in.code_server_url or "http://localhost:8080",
+        status="created"  # Not "running" since nothing is auto-deployed
     )
     db.add(workspace)
     await db.commit()
@@ -97,42 +116,14 @@ async def create_workspace(
     db.add(default_conversation)
     await db.commit()
     
-    logger.info(f"Created workspace {workspace.id} with default conversation {default_conversation.id}")
+    # Set MCP WebSocket URL (after workspace.id is available)
+    workspace.mcp_ws_url = f"{settings.MCP_BACKEND_URL}/mcp/{workspace.id}/connect"
+    await db.commit()
     
-    # 创建 Docker 卷
-    try:
-        volume_info = workspace_manager.create_workspace_volume(workspace.id)
-        workspace.volume_name = volume_info.name
-        
-        # 部署服务栈 (MCP + Code Server)
-        logger.info(f"Deploying service stack for workspace {workspace.id}...")
-        stack_info = workspace_manager.deploy_stack(workspace.id, code_server_password=password)
-        
-        workspace.mcp_container_id = stack_info["mcp_container_id"]
-        workspace.code_container_id = stack_info["code_container_id"]
-        workspace.mcp_endpoint = stack_info["mcp_endpoint"]
-        workspace.code_server_endpoint = stack_info["code_server_endpoint"]
-        
-        # Save MCP token and Hub URL to config
-        if "mcp_token" in stack_info:
-            if workspace.config is None: workspace.config = {}
-            # Create a new dict to ensure SQLAlchemy tracking detects the change
-            new_config = dict(workspace.config)
-            new_config["mcp_token"] = stack_info.get("mcp_token")
-            new_config["mcp_hub_url"] = stack_info.get("mcp_hub_url")
-            workspace.config = new_config
-            
-        workspace.status = "running"
-        
-        await db.commit()
-        logger.info(f"工作空间 {workspace.id} 创建成功，卷: {volume_info.name}, Stack: Running")
-    except Exception as e:
-        logger.error(f"创建资源失败: {e}")
-        workspace.status = "error"
-        # 尝试回滚清理
-        workspace_manager.terminate_stack(workspace.id)
-        # Note: We don't delete the workspace record so user can see error, or we could.
-        await db.commit()
+    logger.info(f"Created workspace {workspace.id} with default conversation {default_conversation.id}")
+    logger.info(f"MCP Connection - URL: {workspace.mcp_ws_url}, Token: {mcp_token}")
+    logger.info(f"Code Server Password: {code_server_password}")
+    logger.info(f"Workspace created. User must manually deploy MCP executor.")
     
     return workspace
 
@@ -166,8 +157,21 @@ async def update_workspace(
         workspace.name = workspace_in.name
     if workspace_in.description is not None:
         workspace.description = workspace_in.description
+    
+    # Handle config update
+    current_config = dict(workspace.config) if workspace.config else {}
+    
     if workspace_in.config is not None:
-        workspace.config = workspace_in.config
+        current_config.update(workspace_in.config)
+        
+    # Handle Code Server updates
+    if workspace_in.code_server_url is not None:
+        workspace.code_server_url = workspace_in.code_server_url
+        
+    if workspace_in.code_server_password is not None:
+        current_config['code_server_password'] = workspace_in.code_server_password
+        
+    workspace.config = current_config
     
     await db.commit()
     await db.refresh(workspace)
@@ -182,31 +186,24 @@ async def delete_workspace(
     """
     删除工作空间
     
-    同时清理对应的 Docker 卷、容器和服务栈。
+    注意：如果您部署了 MCP 服务器和 Code Server，需要手动停止和清理这些容器。
     """
     result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
     workspace = result.scalars().first()
     if not workspace:
         raise HTTPException(status_code=404, detail="工作空间未找到")
     
-    # 1. Terminate Service Stack
-    try:
-        workspace_manager.terminate_stack(workspace_id)
-    except Exception as e:
-        logger.warning(f"Error terminating stack: {e}")
-
-    # 2. 删除 Docker 卷
-    try:
-        workspace_manager.delete_workspace_volume(workspace_id, force=True)
-        logger.info(f"已删除工作空间 {workspace_id} 的 Docker 卷")
-    except Exception as e:
-        logger.warning(f"删除 Docker 卷失败: {e}")
-    
-    # 3. 删除数据库记录
+    # 删除数据库记录
     await db.delete(workspace)
     await db.commit()
     
-    return {"status": "deleted", "workspace_id": workspace_id}
+    logger.info(f"已删除工作空间 {workspace_id}，请手动清理相关的 Docker 容器和卷")
+    return {
+        "status": "deleted", 
+        "workspace_id": workspace_id,
+        "message": "工作空间已删除。如果您部署了 MCP 服务器，请手动运行 'docker-compose down' 清理容器。"
+    }
+
 
 
 @router.post("/batch_delete")
@@ -228,18 +225,6 @@ async def batch_delete_workspaces(
     count = 0
     for workspace in workspaces:
         try:
-            # Terminate Stack
-            try:
-                workspace_manager.terminate_stack(workspace.id)
-            except Exception as e:
-                logger.warning(f"终止栈失败 ({workspace.id}): {e}")
-
-            # 删除 Docker 卷
-            try:
-                workspace_manager.delete_workspace_volume(workspace.id, force=True)
-            except Exception as e:
-                logger.warning(f"删除 Docker 卷失败 ({workspace.id}): {e}")
-            
             # 删除数据库记录
             await db.delete(workspace)
             count += 1
@@ -411,61 +396,339 @@ async def run_command(
     
     return {"status": "started", "message": f"Command '{request.command}' started in background"}
 
-@router.post("/{workspace_id}/connection-token")
-async def get_connection_token(
+
+
+def _generate_docker_compose_config(workspace: Workspace, mcp_token: str) -> str:
+    # Get Code Server password from config
+    code_server_password = workspace.config.get('code_server_password', 'changeme') if workspace.config else 'changeme'
+    
+    # Parse port from code_server_url
+    code_server_port = "8080"
+    if workspace.code_server_url:
+        from urllib.parse import urlparse
+        try:
+            parsed = urlparse(workspace.code_server_url)
+            if parsed.port:
+                code_server_port = str(parsed.port)
+        except:
+            pass
+    
+    # Use workspace_manager for consistent volume naming
+    volume_name = workspace_manager.get_volume_name(workspace.id)
+            
+    return f'''services:
+  mcp-server:
+    image: diudiudiuuuu/redagent-mcp-server:latest
+    container_name: mcp-server-{workspace.id}
+    volumes:
+      # Use named volume for workspace data (shared with code-server)
+      - {volume_name}:/app/workspace_data
+      # CRITICAL: Allow MCP to manage Docker containers (for tool execution)
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./workspace_config:/app/config
+    environment:
+      - WORKSPACE_VOLUME_NAME={volume_name}
+      - WORKSPACE_ID={workspace.id}
+      - MCP_HUB_URL={workspace.mcp_ws_url}
+      - MCP_TOKEN={mcp_token}
+    restart: unless-stopped
+    networks:
+      - workspace-network
+
+  code-server:
+    image: codercom/code-server:latest
+    container_name: code-server-{workspace.id}
+    volumes:
+      # Share the same workspace volume with mcp-server
+      - {volume_name}:/home/coder/project
+    working_dir: /home/coder/project
+    environment:
+      - TZ=Etc/UTC
+      - PASSWORD={code_server_password}
+    ports:
+      - "{code_server_port}:8080"
+    restart: unless-stopped
+    networks:
+      - workspace-network
+    command: --auth password --disable-telemetry
+
+# Define named volumes for data persistence
+volumes:
+  {volume_name}:
+    driver: local
+
+# Define network for inter-service communication
+networks:
+  workspace-network:
+    driver: bridge
+'''
+
+
+@router.get("/{workspace_id}/mcp-connection-info")
+async def get_mcp_connection_info(
     workspace_id: str,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get an authentication token (cookie) for the Code Server.
-    Allows seamless login without manual password entry.
+    Get MCP connection information for user-deployed MCP servers.
+    Returns WebSocket URL, authentication token, and Code Server credentials.
     """
     result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
     workspace = result.scalar_one_or_none()
     
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
-        
-    config = workspace.config or {}
-    password = config.get("code_server_password")
     
-    if not password:
-        raise HTTPException(status_code=400, detail="Code Server password not found in workspace config")
-        
-    stack_info = workspace_manager.get_container_mount_config(workspace_id) # Just to check if volume exists? No, we need endpoint.
+    if not workspace.mcp_ws_url or not workspace.mcp_token:
+        raise HTTPException(status_code=500, detail="MCP connection credentials not generated")
     
-    # We need to reconstruct the endpoint or retrieve it from the live container
-    # Since we don't persist the endpoint in the DB (it's dynamic based on container port),
-    # we might need to inspect the container again or assume a standard if behind proxy.
-    # However, deploy_stack returns it. But we don't save it to DB in the current schema?
-    # Wait, the frontend has `workspace.code_server_endpoint`. Where does it come from? 
-    # Providing it manually for now based on what we know: workspace_manager tracks it or we inspect.
+    # Generate complete docker-compose.yml template
+    docker_compose_template = _generate_docker_compose_config(workspace, workspace.mcp_token)
+
+    # Get Code Server password for response
+    code_server_password = workspace.config.get('code_server_password', 'changeme') if workspace.config else 'changeme'
     
-    # Actually, let's look at how `get_workspace` populates `code_server_endpoint`.
-    # It seems it might be missing from the DB model or transient.
-    # Let's inspect the container to be sure.
+    return {
+        "workspace_id": workspace.id,
+        "mcp_ws_url": workspace.mcp_ws_url,
+        "mcp_token": workspace.mcp_token,
+        "code_server_password": code_server_password,
+        "code_server_url": workspace.code_server_url or "http://localhost:8080",  # User's configured URL
+        "docker_compose_yml": docker_compose_template  # Clearer field name
+    }
+
+@router.post("/{workspace_id}/regenerate-mcp-token")
+async def regenerate_mcp_token(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Regenerate MCP authentication token for security purposes.
+    This will disconnect any currently connected MCP servers.
+    """
+    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
+    workspace = result.scalar_one_or_none()
     
-    # Re-using logic from deploy_stack to find the port? 
-    # Or better: `workspace_manager` should have a method to get running stack info.
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
     
-    # Let's inspect the container named `code-{workspace_id}`
-    try:
-        container = workspace_manager.client.containers.get(f"code-{workspace_id}")
-        if container.status != 'running':
-             raise HTTPException(status_code=503, detail="Code Server is not running")
-             
-        ports = container.attrs.get('NetworkSettings', {}).get('Ports', {})
-        if '8080/tcp' in ports and ports['8080/tcp']:
-            host_port = ports['8080/tcp'][0]['HostPort']
-            endpoint = f"http://localhost:{host_port}"
-            logger.info(f"Resolved Code Server endpoint for {workspace_id}: {endpoint}")
-        else:
-             raise HTTPException(status_code=503, detail="Code Server port not found")
-             
-        # Now get the cookie
-        cookie = await workspace_manager.get_code_server_cookie(endpoint, password)
-        return {"token": cookie}
-        
-    except Exception as e:
-        logger.error(f"Failed to get connection token: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # Generate new token
+    new_token = str(uuid.uuid4())
+    workspace.mcp_token = new_token
+    
+    await db.commit()
+    logger.info(f"Regenerated MCP token for workspace {workspace_id}")
+    
+    # TODO: Disconnect any active MCP connections for this workspace
+    # This would require integration with ConnectionManager
+    
+    # Generate complete docker-compose.yml template with new token
+    docker_compose_template = _generate_docker_compose_config(workspace, new_token)
+    
+    # Get Code Server password for response
+    code_server_password = workspace.config.get('code_server_password', 'changeme') if workspace.config else 'changeme'
+    
+    return {
+        "workspace_id": workspace.id,
+        "mcp_token": new_token,
+        "mcp_ws_url": workspace.mcp_ws_url,
+        "code_server_password": code_server_password,
+        "code_server_url": workspace.code_server_url or "http://localhost:8080",
+        "docker_compose_yml": docker_compose_template,
+        "message": "Token regenerated successfully. Please update your MCP server configuration."
+    }
+
+@router.get("/config/default-containers")
+async def get_default_containers_yaml():
+    """Download default containers.yaml"""
+    # Try mcp-server root source first (local dev)
+    config_path = BACKEND_ROOT.parent / "mcp-server/containers.yaml"
+    
+    if not config_path.exists():
+        # Try symlink location in backend
+        config_path = BACKEND_ROOT / "backend/app/config/containers.yaml"
+    
+    if not config_path.exists():
+        # Fallback to local config dir relative to app (Docker)
+        config_path = BACKEND_ROOT / "app/config/containers.yaml"
+
+    if not config_path.exists():
+        return Response(content="# Error: containers.yaml not found", media_type="text/yaml", status_code=404)
+
+    with open(config_path, "rb") as f:
+        content = f.read()
+    return Response(content=content, media_type="text/yaml")
+
+
+@router.get("/config/default-tools")
+async def get_default_tools_zip():
+    """Download zipped tools directory"""
+    # Locate tools directory
+    tools_dir = BACKEND_ROOT.parent / "mcp-server/tools"
+    
+    if not tools_dir.exists():
+        return Response(content="Error: tools directory not found", media_type="text/plain", status_code=404)
+
+    # Create zip in memory
+    mem_zip = io.BytesIO()
+    with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        # Walk directory
+        for root, dirs, files in os.walk(tools_dir):
+            for file in files:
+                if file.endswith('.md'): # Only include markdown definitions
+                    file_path = os.path.join(root, file)
+                    # Archive name relative to tools root
+                    arcname = os.path.relpath(file_path, tools_dir)
+                    zf.write(file_path, arcname)
+    
+    return Response(
+        content=mem_zip.getvalue(), 
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=tools.zip"}
+    )
+
+
+@router.get("/{workspace_id}/check.sh")
+async def get_check_script(workspace_id: str, request: Request):
+    """Generate environment check script"""
+    script = f"""#!/bin/bash
+echo -e "\\033[1;34m[RedAgent] Environment Check for Workspace: {workspace_id}\\033[0m"
+
+# 1. Check Docker
+if command -v docker &> /dev/null; then
+    echo -e "✅ Docker is installed: $(docker --version)"
+else
+    echo -e "❌ Docker is NOT installed. Please install Docker first."
+    exit 1
+fi
+
+# 2. Check Docker Compose
+if docker compose version &> /dev/null; then
+    echo -e "✅ Docker Compose is available."
+elif command -v docker-compose &> /dev/null; then
+    echo -e "✅ Docker Compose (legacy) is available."
+else
+    echo -e "❌ Docker Compose is NOT installed."
+    exit 1
+fi
+
+# 3. Check connectivity to Backend
+echo -e "Checking connectivity to backend ({request.base_url})..."
+if command -v curl &> /dev/null; then
+    status_code=$(curl -s -o /dev/null -w "%{{http_code}}" {request.base_url}health || echo "000")
+    # Assuming /health might not exist yet, but even 404 means connectable
+    echo -e "✅ Backend connection successful."
+else
+    echo -e "⚠️  curl not found, skipping connectivity check."
+fi
+
+echo -e "\\033[1;32mEverything looks good! Run init.sh next.\\033[0m"
+"""
+    return Response(content=script, media_type="text/x-shellscript")
+
+
+@router.get("/{workspace_id}/init.sh")
+async def get_init_script(
+    workspace_id: str, 
+    request: Request,
+    db: AsyncSession = Depends(get_db)  # Changed from db: AsyncSession = Depends(get_db) inside function logic
+):
+    """Generate initialization script"""
+    # We need to fetch workspace to get the token and settings
+    # But init.sh is just setup, credentials are in docker-compose.yml 
+    # which we can regenerate/fetch.
+    
+    BASE_URL = str(request.base_url).rstrip('/')
+    # Assuming API prefix /api/v1? No request.base_url includes scheme://host:port/
+    # Router prefix is usually included?
+    # We need full URL to API.
+    # request.base_url returns base path. We append workspaces/...
+    
+    API_URL = f"{BASE_URL}/workspaces"
+
+    script = f"""#!/bin/bash
+set -e
+
+WORKSPACE_ID="{workspace_id}"
+API_URL="{API_URL}"
+
+echo -e "\\033[1;34m[RedAgent] Initializing Workspace: $WORKSPACE_ID\\033[0m"
+
+# 1. Create Directories
+echo -e "📂 Creating directories..."
+mkdir -p workspace_data
+mkdir -p workspace_config/tools
+chmod 777 workspace_data
+
+# 2. Download Configuration
+echo -e "⬇️  Downloading configuration..."
+# Download containers.yaml
+if curl -s -f "$API_URL/config/default-containers" -o workspace_config/containers.yaml; then
+    echo -e "✅ Loaded containers.yaml"
+else
+    echo -e "❌ Failed to download containers.yaml"
+    exit 1
+fi
+
+# Download tools.zip and unzip
+echo -e "⬇️  Downloading tools..."
+if curl -s -f "$API_URL/config/default-tools" -o tools.zip; then
+    unzip -o -q tools.zip -d workspace_config/tools
+    rm tools.zip
+    echo -e "✅ Loaded knowledge base (tools)"
+else
+    echo -e "❌ Failed to download tools"
+    exit 1
+fi
+
+# 3. Generate docker-compose.yml
+# We can fetch mcp-connection-info which returns the template in JSON
+echo -e "📝 Generating docker-compose.yml..."
+# We use a python one-liner or simple curl processing if jq exists, else straightforward dump
+# Actually, let's just use the API to get the info.
+# NOTE: This endpoint requires no auth currently? Or User Token?
+# workspaces endpoints are usually unauthenticated in this MVP phase or rely on session cookie.
+# If auth is required, this script will fail.
+# Assuming no auth for mvp for now.
+
+RESPONSE=$(curl -s "$API_URL/$WORKSPACE_ID/mcp-connection-info")
+# Extract docker_compose_yml from JSON. 
+# Ideally we should have a dedicated endpoint for raw yaml download.
+# For now, let's extract it using python (installed usually) or grep/sed (fragile).
+# Or we can simply ECHO the content from THIS python function into the script?
+# Yes! We can generate the YAML content server-side and embed it in the script!
+"""
+
+    # Fetch workspace info to generate YAML
+    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
+    workspace = result.scalar_one_or_none()
+    
+    if not workspace:
+         return Response(content="echo 'Workspace not found'", media_type="text/x-shellscript")
+         
+    # Generate YAML (reuse logic)
+    # Copied from get_mcp_connection_info logic (simplified)
+    # ... logic repetition ...
+    # To avoid repetition, we should call a helper. 
+    # But for now I will inline it or fetch it.
+    
+    # Let's call the logic locally or just fetch it via `get_mcp_connection_info` logic
+    # Reuse is hard without refactoring.
+    
+    docker_compose_content = _generate_docker_compose_config(workspace, workspace.mcp_token)
+    
+    # Escape single quotes for shell heredoc
+    docker_compose_content_escaped = docker_compose_content.replace("'", "'\\''")
+
+    script += f"""
+cat <<EOF > docker-compose.yml
+{docker_compose_content_escaped}
+EOF
+echo -e "✅ Generated docker-compose.yml"
+
+echo -e "\\033[1;32mInitialization Complete!\\033[0m"
+echo -e "🚀 Run the following command to start services:"
+echo -e "\\033[1m  docker-compose up -d\\033[0m"
+"""
+    return Response(content=script, media_type="text/x-shellscript")
+

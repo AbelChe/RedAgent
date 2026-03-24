@@ -146,42 +146,60 @@ SECURITY PROTOCOLS (IMMUTABLE):
 def check_approval_node(state: AgentState):
     """
     Determines if the proposed tool call requires approval.
+
+    Uses a two-layer security policy:
+    1. Hardcoded blacklist for catastrophic commands (always block)
+    2. Risk-level-based policy from container registry metadata
+       - low:     auto-approve
+       - medium:  auto-approve
+       - high:    require human approval
+       - critical: require human approval
     """
+    from app.services.container_registry import extract_tool_from_command, get_container_config
+
     messages = state["messages"]
     last_message = messages[-1]
     mode = state.get("mode", "agent")
-    
+
     # Ask and Planning modes should never execute tools
-    # If LLM hallucinates a tool call in these modes, we stop it here.
     if mode != "agent" and last_message.tool_calls:
-         # Remove tool calls to prevent execution
         last_message.tool_calls = []
         return {"next_step": "end"}
 
     if not last_message.tool_calls:
-        return {"next_step": "end"} # No tool call, must be final answer
-        
-    # Check if already approved (e.g. via Resume Task API)
+        return {"next_step": "end"}
+
+    # Already approved (e.g. via Resume Task API)
     if state.get("user_approval") == "approved":
         return {"next_step": "tool"}
-        
-    # Blacklist for hazardous commands
-    dangerous_patterns = [
-        "rm -rf", 
-        "> /dev/sda", 
-        "mkfs", 
-        "dd if=/dev/zero", 
-        ":(){ :|:& };:", # Fork bomb
-        "shutdown", 
-        "reboot", 
-        "wget http://malicious", # Example generic pattern
+
+    # Layer 1: Hardcoded blacklist for catastrophic/destructive patterns
+    _catastrophic_patterns = [
+        "rm -rf /",
+        "> /dev/sda",
+        "mkfs",
+        "dd if=/dev/zero",
+        ":(){ :|:& };:",
+        "shutdown",
+        "reboot",
     ]
-    
+
     for tool_call in last_message.tool_calls:
         cmd = tool_call["args"].get("command", "")
-        if any(pattern in cmd for pattern in dangerous_patterns):
-             return {"user_approval": "pending", "pending_command": cmd, "next_step": "wait_approval"}
-            
+        if any(pattern in cmd for pattern in _catastrophic_patterns):
+            return {"user_approval": "pending", "pending_command": cmd, "next_step": "wait_approval"}
+
+    # Layer 2: Risk-level-based policy from container registry
+    for tool_call in last_message.tool_calls:
+        cmd = tool_call["args"].get("command", "")
+        if not cmd:
+            continue
+        tool_name = extract_tool_from_command(cmd)
+        config = get_container_config(tool_name)
+
+        if config.requires_approval or config.risk_level in ("high", "critical"):
+            return {"user_approval": "pending", "pending_command": cmd, "next_step": "wait_approval"}
+
     return {"user_approval": "auto", "next_step": "tool"}
 
 

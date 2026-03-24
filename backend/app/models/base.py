@@ -16,15 +16,28 @@ class Workspace(Base):
     description = Column(String, nullable=True)
     mode = Column(String, default="sandbox")  # 'sandbox' | 'agent'
     config = Column(JSON, default={})
-    volume_name = Column(String, nullable=True)  # Docker 卷名称
+    
+    # DEPRECATED: The following fields are no longer used after removing auto-deployment
+    # They are kept for backward compatibility with existing workspaces
+    volume_name = Column(String, nullable=True)  # DEPRECATED: Docker volume name
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
-    # Service Stack Info
-    mcp_container_id = Column(String, nullable=True)
-    code_container_id = Column(String, nullable=True)
-    mcp_endpoint = Column(String, nullable=True)     # e.g. http://172.x.x.x:8000
-    code_server_endpoint = Column(String, nullable=True) # e.g. http://172.x.x.x:8443
-    status = Column(String, default="provisioning") # provisioning, running, error, stopped
+    # MCP Connection Credentials (for user-deployed MCP servers)
+    mcp_ws_url = Column(String, nullable=True)  # WebSocket connection URL
+    mcp_token = Column(String, nullable=True)   # Authentication token
+    
+    # User-configured Code Server (for IDE embedding)
+    code_server_url = Column(String, nullable=True, default="http://localhost:8080")  # User's Code Server URL
+    
+    # DEPRECATED: Legacy auto-deployment fields (no longer used)
+    mcp_container_id = Column(String, nullable=True)  # DEPRECATED
+    code_container_id = Column(String, nullable=True)  # DEPRECATED
+    mcp_endpoint = Column(String, nullable=True)  # DEPRECATED
+    code_server_endpoint = Column(String, nullable=True)  # DEPRECATED
+    
+    status = Column(String, default="created")  # created, running (legacy), error, stopped
+
 
     tasks = relationship("Task", back_populates="workspace")
     messages = relationship("Message", back_populates="workspace")

@@ -35,57 +35,24 @@ async def mcp_connect_endpoint(websocket: WebSocket, workspace_id: str):
     MCP Server Call-Home Endpoint (Workspace Specific)
     Authentication Required: `x-mcp-token` header or `token` query parameter
     """
-    from app.core.database import AsyncSessionLocal
-    from app.models.base import Workspace
-    from sqlalchemy import select
-
-    # 1. AUTHENTICATION
+    # Extract token from header or query param
     auth_header = websocket.headers.get("x-mcp-token")
     query_token = websocket.query_params.get("token")
     client_token = auth_header or query_token
 
     if not client_token:
         print(f"⛔ MCP Auth Failed for {workspace_id}: No token provided.")
-        await websocket.close(code=1008)
+        await websocket.close(code=1008, reason="No authentication token provided")
         return
 
-    # Verify against database
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
-        workspace = result.scalar_one_or_none()
-        
-        if not workspace:
-            print(f"⛔ MCP Auth Failed: Workspace {workspace_id} not found.")
-            await websocket.close(code=1008)
-            return
-
-        config = workspace.config or {}
-        expected_token = config.get("mcp_token")
-        
-        print(f"🔍 [MCP Auth Debug] Workspace: {workspace_id}")
-        print(f"🔍 [MCP Auth Debug] Received Token: {client_token}")
-        print(f"🔍 [MCP Auth Debug] Expected Token: {expected_token}")
-
-        # Fallback for legacy/dev environments if needed, but better to be strict
-        
-        # Fallback for legacy/dev environments if needed, but better to be strict
-        if not expected_token:
-             # Try legacy global token if defined, specifically for 'dev' environment
-             import os
-             if os.getenv("ENVIRONMENT") == "dev":
-                 expected_token = os.getenv("MCP_TOKEN", "dev-token-placeholder")
-             else:
-                 print(f"⛔ MCP Auth Failed: No token defined for workspace {workspace_id}.")
-                 await websocket.close(code=1008)
-                 return
-
-        if client_token != expected_token:
-            print(f"⛔ MCP Auth Failed for {workspace_id}. Token mismatch.")
-            await websocket.close(code=1008)
-            return
-
-    print(f"🔌 Connection attempt from MCP Node for {workspace_id}: {websocket.client.host} (Auth Success)")
-    await manager.register_mcp(workspace_id, websocket)
+    # Register MCP (authentication happens inside register_mcp)
+    print(f"🔌 Connection attempt from MCP Node for {workspace_id}: {websocket.client.host if websocket.client else 'unknown'}")
+    try:
+        await manager.register_mcp(workspace_id, websocket, client_token)
+    except ValueError as e:
+        # Authentication failed (connection already closed by register_mcp)
+        print(f"⛔ MCP Registration failed: {e}")
+        return
     
     try:
         # Initial Handshake: Ask for tools

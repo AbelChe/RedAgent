@@ -20,6 +20,8 @@ class ConnectionManager:
         # MCP Node Connection (Workspace specific)
         # workspace_id -> WebSocket
         self.mcp_connection: Dict[str, WebSocket] = {}
+        # MCP Connection metadata: workspace_id -> {"connected_at": datetime, "token": str}
+        self.mcp_metadata: Dict[str, dict] = {}
         # Pending RPC requests: id -> Future
         self.pending_requests: Dict[str, asyncio.Future] = {}
 
@@ -65,34 +67,66 @@ class ConnectionManager:
 
     # --- MCP Support ---
 
-    async def register_mcp(self, workspace_id: str, websocket: WebSocket):
-        """Register the MCP Server connection for a workspace"""
-        await websocket.accept()
-        if not self.mcp_connection:
-             self.mcp_connection = {} # Initialize if needed (though init does it)
+    async def authenticate_mcp(self, workspace_id: str, token: str) -> bool:
+        """Verify MCP connection token against workspace credentials"""
+        from app.core.database import AsyncSessionLocal
+        from app.models.base import Workspace
+        from sqlalchemy import select
         
-        # In case we repurposed self.mcp_connection to be Dict[str, WebSocket]
-        # But wait, type hint was Optional[WebSocket]. I need to update init too.
-        # Let's assume I will update init in a separate step or just cast here.
-        # Actually, let's update init via multi_replace or careful chunking.
-        # I'll rely on python dynamic typing but cleaner to update init.
-        
-        # For now, let's treat self.mcp_connection as Dict[str, WebSocket] 
-        # (I will update init in next step to be clean)
-        if hasattr(self.mcp_connection, "send_text"): # Old single socket
-             self.mcp_connection = {}
-             
-        if self.mcp_connection is None:
-            self.mcp_connection = {}
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
+                workspace = result.scalar_one_or_none()
+                
+                if not workspace:
+                    logging.warning(f"Authentication failed: Workspace {workspace_id} not found")
+                    return False
+                
+                if not workspace.mcp_token:
+                    logging.warning(f"Authentication failed: Workspace {workspace_id} has no token configured")
+                    return False
+                
+                # Simple token comparison (could use hashing in production)
+                if workspace.mcp_token != token:
+                    logging.warning(f"Authentication failed: Invalid token for workspace {workspace_id}")
+                    return False
+                
+                logging.info(f"✅ MCP authentication successful for workspace {workspace_id}")
+                return True
+        except Exception as e:
+            logging.error(f"Authentication error: {e}")
+            return False
 
+    async def register_mcp(self, workspace_id: str, websocket: WebSocket, token: str):
+        """Register the MCP Server connection for a workspace with authentication"""
+        from datetime import datetime
+        
+        # Authenticate before accepting connection
+        if not await self.authenticate_mcp(workspace_id, token):
+            await websocket.close(code=1008, reason="Authentication failed")
+            raise ValueError(f"MCP authentication failed for workspace {workspace_id}")
+        
+        await websocket.accept()
+        
+        if not self.mcp_connection:
+            self.mcp_connection = {}
+        if not self.mcp_metadata:
+            self.mcp_metadata = {}
+        
         self.mcp_connection[workspace_id] = websocket
-        print(f"🔌 MCP Node Registered for workspace {workspace_id}")
+        self.mcp_metadata[workspace_id] = {
+            "connected_at": datetime.utcnow().isoformat(),
+            "token": token  # Store for reference (not exposed)
+        }
+        logging.info(f"🔌 MCP Node Registered for workspace {workspace_id}")
     
     def disconnect_mcp(self, workspace_id: str):
         if self.mcp_connection and isinstance(self.mcp_connection, dict):
             if workspace_id in self.mcp_connection:
                 del self.mcp_connection[workspace_id]
-        print(f"🔌 MCP Node Disconnected for workspace {workspace_id}")
+        if self.mcp_metadata and workspace_id in self.mcp_metadata:
+            del self.mcp_metadata[workspace_id]
+        logging.info(f"🔌 MCP Node Disconnected for workspace {workspace_id}")
 
     async def send_mcp_notification(self, workspace_id: str, method: str, params: dict):
         """Send a one-way notification to MCP"""
@@ -197,29 +231,81 @@ class ConnectionManager:
                 method = message.get("method")
                 params = message.get("params", {})
                 
-                if method == "terminal/output":
+                if method == "notifications/message":
+                    # MCP standard logging notification (MCP 2025-03-26)
+                    logger_name = params.get("logger", "")
+                    log_data = params.get("data", {})
+
+                    if logger_name == "terminal":
+                        # Terminal output — route to terminal WebSocket and SSE
+                        session_id = log_data.get("sessionId") if isinstance(log_data, dict) else None
+                        content = log_data.get("data") if isinstance(log_data, dict) else str(log_data)
+
+                        if session_id and session_id in self.terminal_connections:
+                            ws = self.terminal_connections[session_id]
+                            try:
+                                await ws.send_text(content)
+                            except Exception as e:
+                                print(f"⚠️ Error forwarding terminal output via WS: {e}")
+                                self.disconnect_terminal(session_id)
+
+                        if session_id:
+                            for ws_id in event_bus._subscribers.keys():
+                                await event_bus.publish(Event(
+                                    type="terminal/output",
+                                    workspace_id=ws_id,
+                                    data={"sessionId": session_id, "data": content}
+                                ))
+                    else:
+                        # Tool progress log — route to event bus
+                        log_level = params.get("level", "info")
+                        log_workspace_id = log_data.get("workspaceId") if isinstance(log_data, dict) else None
+                        tool_name = logger_name or (log_data.get("tool") if isinstance(log_data, dict) else "unknown")
+
+                        event_data = {
+                            "type": "tool_log",
+                            "data": {
+                                "tool": tool_name,
+                                "level": log_level,
+                                "data": log_data
+                            }
+                        }
+
+                        if log_workspace_id:
+                            await event_bus.publish(Event(
+                                type="tool_log",
+                                workspace_id=log_workspace_id,
+                                data=event_data
+                            ))
+                        else:
+                            for ws_id in event_bus._subscribers.keys():
+                                await event_bus.publish(Event(
+                                    type="tool_log",
+                                    workspace_id=ws_id,
+                                    data=event_data
+                                ))
+
+                elif method == "terminal/output":
+                    # Legacy: custom terminal notification (backward compatibility)
                     session_id = params.get("sessionId")
                     content = params.get("data")
-                    # Debug Log
-                    print(f"🔍 [Back-Term] Received output for {session_id}. Len: {len(content) if content else 0}. Has WS? {session_id in self.terminal_connections}")
-                    
-                    if session_id in self.terminal_connections:
+
+                    if session_id and session_id in self.terminal_connections:
                         ws = self.terminal_connections[session_id]
                         try:
-                            # Forward directly to frontend WS if connected
                             await ws.send_text(content)
                         except Exception as e:
                             print(f"⚠️ Error forwarding terminal output via WS: {e}")
                             self.disconnect_terminal(session_id)
-                            
-                    # 2. Publish to SSE (Critical for React Frontend)
-                    for ws_id in event_bus._subscribers.keys():
-                        await event_bus.publish(Event(
-                            type="terminal/output",
-                            workspace_id=ws_id,
-                            data={"sessionId": session_id, "data": content}
-                        ))
-                
+
+                    if session_id:
+                        for ws_id in event_bus._subscribers.keys():
+                            await event_bus.publish(Event(
+                                type="terminal/output",
+                                workspace_id=ws_id,
+                                data={"sessionId": session_id, "data": content}
+                            ))
+
                 elif method == "tool/log":
                     # Handle Tool Logs (Filtered by Workspace)
                     tool_name = params.get("tool")
