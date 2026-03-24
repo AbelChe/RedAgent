@@ -17,7 +17,7 @@ Thumbs.db
 
 # Project-specific
 dev-docs/
-bee-starter-openapi/
+bee-starter-openapi
 
 # Environment files
 .env

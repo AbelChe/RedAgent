@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "redagent-local": {
+      "command": "npx",
+      "args": [
+        "ts-node",
+        "/path/to/RedAgent/mcp-server/src/index.ts",
+        "--mode", "stdio"
+      ],
+      "env": {
+        "CONTAINERS_CONFIG_PATH": "/path/to/RedAgent/mcp-server/containers.yaml",
+        "BEE_API_URL": "",
+        "BEE_API_TOKEN": ""
+      }
+    },
+    "redagent-http": {
+      "command": "npx",
+      "args": ["mcp-remote", "http://localhost:3001/mcp"],
+      "env": {
+        "MCP_TOKEN": "your-mcp-token"
+      }
+    }
+  }
+}
